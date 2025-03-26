@@ -8,10 +8,15 @@ const corsHeaders = {
     "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization, X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Date, X-Api-Version",
     "Access-Control-Allow-Credentials": "true",
+    "Access-Control-Max-Age": "86400",
 };
 
-export async function OPTIONS() {
-    return NextResponse.json({}, { headers: corsHeaders });
+// Handle OPTIONS requests for CORS
+export async function OPTIONS(request: Request) {
+    return new Response(null, {
+        status: 204,
+        headers: corsHeaders
+    });
 }
 
 const {
@@ -38,10 +43,13 @@ export async function GET() {
 
 // Handle POST requests
 export async function POST(req: Request) {
-    // Add CORS headers to the response
-    if (req.method === 'OPTIONS') {
-        return new Response(null, { headers: corsHeaders });
-    }
+    // Add CORS headers to all responses
+    const headers = {
+        ...corsHeaders,
+        'Content-Type': 'text/event-stream',
+        'Connection': 'keep-alive',
+        'Cache-Control': 'no-cache, no-transform',
+    };
 
     try {
         console.log("API route called with request:", req.url);
@@ -140,14 +148,7 @@ export async function POST(req: Request) {
         })
 
         const stream = OpenAIStream(response)
-        return new StreamingTextResponse(stream, {
-            headers: {
-                ...corsHeaders,
-                'Content-Type': 'text/event-stream',
-                'Cache-Control': 'no-cache',
-                'Connection': 'keep-alive',
-            }
-        });
+        return new StreamingTextResponse(stream, { headers });
         
     } catch (error) {
         console.error("Error in chat API route:", error);

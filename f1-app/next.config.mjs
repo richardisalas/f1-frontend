@@ -20,9 +20,6 @@ const nextConfig = {
       },
     ]
   },
-  experimental: {
-    missingSuspenseWithCSRError: false,
-  },
 }
 
 export default nextConfig 
