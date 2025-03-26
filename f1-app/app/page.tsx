@@ -22,6 +22,8 @@ export default function Home() {
     headers: {
       'Content-Type': 'application/json',
       'Accept': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'X-Requested-With': 'XMLHttpRequest',
     },
     body: {
       // Add any additional configuration needed for the API
@@ -85,8 +87,95 @@ export default function Home() {
       // Clear input first
       setInput("");
       
-      // Use handleSubmit from useChat which will handle adding the message
-      handleSubmit(e);
+      // Create a custom request rather than using useChat's handleSubmit for Safari compatibility
+      if (navigator.userAgent.includes('Safari') && !navigator.userAgent.includes('Chrome')) {
+        // Special handling for Safari
+        const userMessage: Message = { 
+          id: Date.now().toString(),
+          role: 'user', 
+          content: input 
+        };
+        const newMessages = [...messages, userMessage];
+        setMessages(newMessages);
+        
+        try {
+          const response = await fetch('/api/chat', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'text/event-stream',
+              'Cache-Control': 'no-cache',
+              'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: JSON.stringify({
+              messages: newMessages,
+              config: {
+                temperature: 0.7,
+                stream: true,
+              }
+            }),
+            credentials: 'same-origin',
+          });
+          
+          if (!response.ok) {
+            throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
+          }
+          
+          // Add blank assistant message
+          const assistantMessage: Message = { 
+            id: (Date.now() + 1).toString(),
+            role: 'assistant', 
+            content: '' 
+          };
+          setMessages([...newMessages, assistantMessage]);
+          
+          const reader = response.body?.getReader();
+          if (!reader) {
+            throw new Error('Response body is not readable');
+          }
+          
+          // Process the stream
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            
+            // Process the chunk data
+            const text = new TextDecoder().decode(value);
+            const chunks = text.split('\n\n').filter(Boolean);
+            
+            // Find and update content
+            for (const chunk of chunks) {
+              if (chunk.startsWith('data: ') && chunk !== 'data: [DONE]') {
+                try {
+                  const data = JSON.parse(chunk.replace('data: ', ''));
+                  const content = data.choices[0]?.delta?.content || '';
+                  if (content) {
+                    // Update message content directly
+                    const updatedMessages = [...messages];
+                    if (updatedMessages.length > 0 && updatedMessages[updatedMessages.length - 1].role === 'assistant') {
+                      const lastMessage = updatedMessages[updatedMessages.length - 1];
+                      lastMessage.content += content;
+                      setMessages(updatedMessages);
+                      setWaitingForFirstToken(false);
+                    }
+                  }
+                } catch (e) {
+                  console.error('Error parsing chunk:', e);
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error in custom fetch:', error);
+          setDbError(error instanceof Error ? error.message : 'Error processing request');
+        } finally {
+          setIsSubmitting(false);
+          setWaitingForFirstToken(false);
+        }
+      } else {
+        // Use handleSubmit for other browsers
+        handleSubmit(e);
+      }
     } catch (error) {
       console.error("Error submitting form:", error);
       setDbError(error instanceof Error ? error.message : "Failed to submit message");

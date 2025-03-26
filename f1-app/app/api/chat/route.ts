@@ -6,8 +6,8 @@ import { NextResponse } from "next/server"
 // CORS headers to allow requests from any origin
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Date, X-Api-Version",
     "Access-Control-Max-Age": "86400",
 };
 
@@ -39,6 +39,30 @@ export async function OPTIONS() {
     });
 }
 
+// Handle GET requests
+export async function GET() {
+    return new Response("This endpoint only accepts POST requests", {
+        status: 405,
+        headers: corsHeaders
+    });
+}
+
+// Handle PUT requests
+export async function PUT() {
+    return new Response("This endpoint only accepts POST requests", {
+        status: 405,
+        headers: corsHeaders
+    });
+}
+
+// Handle DELETE requests
+export async function DELETE() {
+    return new Response("This endpoint only accepts POST requests", {
+        status: 405,
+        headers: corsHeaders
+    });
+}
+
 // Main API handler
 export async function POST(req: Request) {
     // Define response headers
@@ -51,7 +75,7 @@ export async function POST(req: Request) {
 
     try {
         // Log request info
-        console.log("API route called with request:", req.url);
+        console.log("API route called with request method:", req.method, "URL:", req.url);
         
         // Validate environment variables
         if (!OPENAI_API_KEY) {
