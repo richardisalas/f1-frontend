@@ -2,49 +2,32 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 export function middleware(request: NextRequest) {
-  // Get the path of the request
-  const path = request.nextUrl.pathname;
+  console.log("Middleware running for:", request.method, request.nextUrl.pathname);
   
-  // If it's an OPTIONS request, return a proper preflight response immediately
+  // Get incoming request origin
+  const origin = request.headers.get('origin') || '*';
+  
+  // Create base response with CORS headers for all requests
+  const response = NextResponse.next();
+  
+  // Set CORS headers
+  response.headers.set('Access-Control-Allow-Origin', origin);
+  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Date, X-Api-Version');
+  response.headers.set('Access-Control-Max-Age', '86400');
+  
+  // Preflight OPTIONS request
   if (request.method === 'OPTIONS') {
     return new NextResponse(null, {
       status: 204,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Date, X-Api-Version',
-        'Access-Control-Max-Age': '86400',
-      },
+      headers: response.headers,
     });
   }
   
-  // If it's an API request, add CORS headers
-  if (path.startsWith('/api/')) {
-    // Create a NextResponse
-    const response = NextResponse.next();
-    
-    // Add the CORS headers
-    response.headers.set('Access-Control-Allow-Origin', '*');
-    response.headers.set(
-      'Access-Control-Allow-Methods', 
-      'GET, POST, PUT, DELETE, OPTIONS'
-    );
-    response.headers.set(
-      'Access-Control-Allow-Headers', 
-      'Content-Type, Authorization, X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Date, X-Api-Version'
-    );
-    response.headers.set('Access-Control-Max-Age', '86400');
-    
-    console.log('Middleware applied CORS headers to', path);
-    
-    return response;
-  }
-  
-  // For non-API routes, continue without modification
-  return NextResponse.next();
+  return response;
 }
 
-// Configure the matcher to run on API routes and OPTIONS requests
+// Only match API routes
 export const config = {
   matcher: ['/api/:path*'],
 }; 
