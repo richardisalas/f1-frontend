@@ -15,7 +15,7 @@ const corsHeaders = {
 const {
     ASTRADB_DB_NAMESPACE,
     ASTRADB_DB_COLLECTION,
-    ASTRADB_DB_ENDPOINT,
+    ASTRA_DB_API_ENDPOINT,
     ASTRA_DB_APPLICATION_TOKEN,
     OPENAI_API_KEY
 } = process.env
@@ -27,7 +27,7 @@ const openai = new OpenAI({
 
 // Initialize AstraDB client
 const client = new DataAPIClient(ASTRA_DB_APPLICATION_TOKEN)
-const db = client.db(ASTRADB_DB_ENDPOINT, { namespace: ASTRADB_DB_NAMESPACE })
+const db = client.db(ASTRA_DB_API_ENDPOINT, { namespace: ASTRADB_DB_NAMESPACE })
 
 export const runtime = 'edge'
 
@@ -58,7 +58,7 @@ export async function POST(req: Request) {
             throw new Error("OpenAI API key is not configured");
         }
 
-        if (!ASTRA_DB_APPLICATION_TOKEN || !ASTRADB_DB_ENDPOINT || !ASTRADB_DB_NAMESPACE || !ASTRADB_DB_COLLECTION) {
+        if (!ASTRA_DB_APPLICATION_TOKEN || !ASTRA_DB_API_ENDPOINT || !ASTRADB_DB_NAMESPACE || !ASTRADB_DB_COLLECTION) {
             throw new Error("Database configuration is incomplete");
         }
 
@@ -173,7 +173,7 @@ export async function POST(req: Request) {
                 details: {
                     dbConnected: !!client && !!db,
                     hasOpenAIKey: !!OPENAI_API_KEY,
-                    hasAstraDBConfig: !!(ASTRADB_DB_NAMESPACE && ASTRADB_DB_COLLECTION && ASTRADB_DB_ENDPOINT && ASTRA_DB_APPLICATION_TOKEN)
+                    hasAstraDBConfig: !!(ASTRADB_DB_NAMESPACE && ASTRADB_DB_COLLECTION && ASTRA_DB_API_ENDPOINT && ASTRA_DB_APPLICATION_TOKEN)
                 }
             }), 
             {

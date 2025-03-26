@@ -11,13 +11,13 @@ type SimilarityMetric = "dot_product" | "cosine" | "euclidean"
 const {
     ASTRADB_DB_NAMESPACE,
     ASTRADB_DB_COLLECTION,
-    ASTRADB_DB_ENDPOINT,
+    ASTRA_DB_API_ENDPOINT,
     ASTRA_DB_APPLICATION_TOKEN,
     OPENAI_API_KEY
 } = process.env
 
 // Validate required environment variables
-if (!ASTRADB_DB_NAMESPACE || !ASTRADB_DB_COLLECTION || !ASTRADB_DB_ENDPOINT || !ASTRA_DB_APPLICATION_TOKEN || !OPENAI_API_KEY) {
+if (!ASTRADB_DB_NAMESPACE || !ASTRADB_DB_COLLECTION || !ASTRA_DB_API_ENDPOINT || !ASTRA_DB_APPLICATION_TOKEN || !OPENAI_API_KEY) {
     throw new Error("Missing required environment variables. Check your .env file.")
 }
 
@@ -93,7 +93,7 @@ const f1Data = [
 ]
 
 const client = new DataAPIClient(ASTRA_DB_APPLICATION_TOKEN)
-const db = client.db(ASTRADB_DB_ENDPOINT, { namespace: ASTRADB_DB_NAMESPACE })
+const db = client.db(ASTRA_DB_API_ENDPOINT, { namespace: ASTRADB_DB_NAMESPACE })
 
 const splitter = new RecursiveCharacterTextSplitter({
     chunkSize: 512,
