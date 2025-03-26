@@ -11,7 +11,13 @@ export default function Home() {
     api: '/api/chat',
     onError: (err) => {
       console.error("Chat error:", err);
+      setIsSubmitting(false);
+      setWaitingForFirstToken(false);
       setDbError(err instanceof Error ? err.message : "Failed to communicate with the server");
+    },
+    onFinish: () => {
+      setIsSubmitting(false);
+      setWaitingForFirstToken(false);
     },
     headers: {
       'Content-Type': 'application/json',
@@ -47,10 +53,10 @@ export default function Home() {
 
   // Effect to detect first token
   useEffect(() => {
-    if (messages.length > 0 && messages[messages.length - 1].role === "assistant") {
-      setWaitingForFirstToken(false)
+    if (messages.length > 0 && messages[messages.length - 1].role === "assistant" && messages[messages.length - 1].content) {
+      setWaitingForFirstToken(false);
     }
-  }, [messages])
+  }, [messages]);
 
   // Function to handle example clicks
   const handleExampleClick = (example: string) => {
@@ -76,73 +82,16 @@ export default function Home() {
       setIsSubmitting(true);
       setWaitingForFirstToken(true);
       
-      // Add the user message immediately to the UI
-      const userMessage: Message = { id: Date.now().toString(), role: 'user', content: input };
-      const newMessages = [...messages, userMessage];
-      setMessages(newMessages);
-      
-      // Clear input
-      const currentInput = input;
+      // Clear input first
       setInput("");
       
-      // Use fetch directly
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          messages: newMessages,
-        }),
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Server responded with ${response.status}: ${await response.text()}`);
-      }
-      
-      // Handle streaming response
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error("Response body is not readable");
-      
-      let assistantMessage: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: '' };
-      
-      // Add empty assistant message
-      setMessages([...newMessages, assistantMessage]);
-      
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        
-        // Decode the chunk
-        const chunk = new TextDecoder().decode(value);
-        
-        // Parse SSE message and update content
-        const chunks = chunk.split('\n\n').filter(Boolean);
-        for (const chunk of chunks) {
-          if (chunk.startsWith('data: ')) {
-            const data = chunk.replace('data: ', '');
-            if (data === '[DONE]') continue;
-            
-            try {
-              const parsed = JSON.parse(data);
-              const content = parsed.choices[0]?.delta?.content || '';
-              
-              // Update the assistant message with the new content
-              assistantMessage.content += content;
-              setMessages([...newMessages, { ...assistantMessage }]);
-              setWaitingForFirstToken(false);
-            } catch (e) {
-              console.error('Error parsing SSE data:', e);
-            }
-          }
-        }
-      }
+      // Use handleSubmit from useChat which will handle adding the message
+      handleSubmit(e);
     } catch (error) {
       console.error("Error submitting form:", error);
       setDbError(error instanceof Error ? error.message : "Failed to submit message");
     } finally {
       setIsSubmitting(false);
-      setWaitingForFirstToken(false);
     }
   }
 
@@ -267,7 +216,7 @@ export default function Home() {
           onSubmit={onFormSubmit} 
           className="input-form"
         >
-          <div className="relative">
+          <div className="relative w-full">
             <textarea
               value={input}
               onChange={handleInputChange}
@@ -287,6 +236,7 @@ export default function Home() {
               type="submit"
               disabled={isLoading || !input.trim()}
               className="send-button"
+              aria-label="Send message"
             >
               {waitingForFirstToken ? (
                 <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
