@@ -1,7 +1,6 @@
 import OpenAI from "openai"
 import { OpenAIStream, StreamingTextResponse } from "ai"
 import { DataAPIClient } from "@datastax/astra-db-ts"
-import { NextResponse } from "next/server"
 
 // CORS headers to allow requests from any origin
 const corsHeaders = {
@@ -31,7 +30,7 @@ const db = client && ASTRA_DB_API_ENDPOINT ? client.db(ASTRA_DB_API_ENDPOINT, { 
 
 export const runtime = 'edge'
 
-// OPTIONS handler - handles preflight requests
+// OPTIONS handler for CORS preflight requests
 export async function OPTIONS() {
     return new Response(null, {
         status: 204,
@@ -39,49 +38,29 @@ export async function OPTIONS() {
     });
 }
 
-// POST handler - main handler for the chat API
+// POST handler for chat requests
 export async function POST(request: Request) {
-    // Define response headers
-    const headers = {
-        ...corsHeaders,
-        'Content-Type': 'text/event-stream',
-        'Connection': 'keep-alive',
-        'Cache-Control': 'no-cache, no-transform',
-    };
-
     try {
-        // Log request info
-        console.log("API route called with POST request");
-        
-        // Validate environment variables
-        if (!OPENAI_API_KEY) {
-            throw new Error("OpenAI API key is not configured");
-        }
-
         // Parse the request body
-        let body;
-        try {
-            body = await request.json();
-        } catch (e) {
-            throw new Error("Failed to parse request body");
-        }
-        
+        const body = await request.json();
         const { messages } = body;
         
-        if (!messages || !Array.isArray(messages) || messages.length === 0) {
-            throw new Error("Invalid messages format");
+        if (!messages || !Array.isArray(messages)) {
+            return new Response(
+                JSON.stringify({ error: "Invalid messages format" }),
+                { 
+                    status: 400,
+                    headers: {
+                        ...corsHeaders,
+                        "Content-Type": "application/json"
+                    }
+                }
+            );
         }
 
-        console.log("Received messages:", messages.length);
-        
         // Extract the latest user message
-        const latestMessage = messages[messages.length - 1]?.content;
-        if (!latestMessage) {
-            throw new Error("No message content found");
-        }
-
-        console.log("Latest message:", latestMessage);
-
+        const latestMessage = messages[messages.length - 1]?.content || "";
+        
         // Get context from vector database
         let docContext = ""
         try {
@@ -89,29 +68,24 @@ export async function POST(request: Request) {
                 model: "text-embedding-3-small",
                 input: latestMessage,
                 encoding_format: "float"
-            })
-            console.log("Created embeddings successfully");
+            });
 
             if (db && ASTRADB_DB_COLLECTION) {
-                const collection = await db.collection(ASTRADB_DB_COLLECTION)
+                const collection = await db.collection(ASTRADB_DB_COLLECTION);
                 const cursor = collection.find(null, {
                     sort: {
                         $vector: embedding.data[0].embedding,
                     },
                     limit: 10
-                })  
+                });  
 
-                const documents = await cursor.toArray()
-                console.log("Retrieved documents count:", documents?.length || 0)
-                
-                const docsMap = documents?.map(doc => doc.text)
-                docContext = JSON.stringify(docsMap)
-            } else {
-                console.warn("Database not initialized. Using empty context.")
+                const documents = await cursor.toArray();
+                const docsMap = documents?.map(doc => doc.text);
+                docContext = JSON.stringify(docsMap);
             }
         } catch (error) {
-            console.error("Error querying database:", error)
-            docContext = ""
+            console.error("Error querying database:", error);
+            docContext = "";
         }
         
         // Create system prompt with context
@@ -135,43 +109,29 @@ export async function POST(request: Request) {
             QUESTION: ${latestMessage}
             ----------
             `
-        }
+        };
         
-        // Generate AI response
-        console.log("About to call OpenAI API with model: gpt-4");
+        // Generate response
+        const response = await openai.chat.completions.create({
+            model: "gpt-4",
+            messages: [template, ...messages],
+            stream: true,
+        });
         
-        try {
-            const response = await openai.chat.completions.create({
-                model: "gpt-4",
-                messages: [template, ...messages],
-                stream: true,
-            });
-            
-            // Stream the response
-            const stream = OpenAIStream(response);
-            return new StreamingTextResponse(stream, { headers });
-        } catch (openaiError) {
-            console.error("OpenAI API call failed:", openaiError);
-            throw openaiError;
-        }
+        // Create a streaming response
+        const stream = OpenAIStream(response);
+        return new StreamingTextResponse(stream, { headers: corsHeaders });
         
     } catch (error) {
-        // Handle errors
         console.error("Error in chat API route:", error);
         
-        const errorMessage = error instanceof Error ? error.message : "Failed to process chat request";
-        const statusCode = 500;
-        
-        // Return error response
         return new Response(
             JSON.stringify({ 
-                error: errorMessage,
-                details: {
-                    hasOpenAIKey: !!OPENAI_API_KEY
-                }
+                error: "Failed to process chat request",
+                details: error instanceof Error ? error.message : "Unknown error"
             }), 
             {
-                status: statusCode,
+                status: 500,
                 headers: {
                     ...corsHeaders,
                     "Content-Type": "application/json",

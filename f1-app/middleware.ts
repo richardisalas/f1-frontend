@@ -2,21 +2,23 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 export function middleware(request: NextRequest) {
-  console.log("Middleware running for:", request.method, request.nextUrl.pathname);
-  
-  // Get incoming request origin
+  // Get the pathname of the request (e.g. /, /api/chat)
+  const path = request.nextUrl.pathname;
+  console.log(`Middleware for ${request.method} ${path}`);
+
+  // Get origin from request headers
   const origin = request.headers.get('origin') || '*';
   
-  // Create base response with CORS headers for all requests
+  // Set CORS headers for API routes
   const response = NextResponse.next();
   
-  // Set CORS headers
+  // Set CORS headers for browser requests
   response.headers.set('Access-Control-Allow-Origin', origin);
   response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Date, X-Api-Version');
   response.headers.set('Access-Control-Max-Age', '86400');
   
-  // Preflight OPTIONS request
+  // Handle OPTIONS preflight request specially
   if (request.method === 'OPTIONS') {
     return new NextResponse(null, {
       status: 204,

@@ -26,16 +26,6 @@ export default function Home() {
     },
     headers: {
       'Content-Type': 'application/json',
-      'Accept': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'X-Requested-With': 'XMLHttpRequest',
-    },
-    body: {
-      // Add any additional configuration needed for the API
-      config: {
-        temperature: 0.7,
-        stream: true,
-      }
     }
   })
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -89,16 +79,14 @@ export default function Home() {
       setIsSubmitting(true);
       setWaitingForFirstToken(true);
       
-      // Use normal form submission through useChat
+      // Use the handleSubmit function directly
       handleSubmit(e);
       
-      // Clear input after submission
+      // Clear input
       setInput("");
     } catch (error) {
       console.error("Error submitting form:", error);
       setDbError(error instanceof Error ? error.message : "Failed to submit message");
-    } finally {
-      setIsSubmitting(false);
     }
   }
 
