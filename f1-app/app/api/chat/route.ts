@@ -33,16 +33,27 @@ export const runtime = 'edge'
 
 // Helper function to handle all requests first for better debugging
 async function handleRequest(req: Request) {
+  // Always add CORS headers to the response, regardless of method
+  const responseHeaders = {
+    ...corsHeaders
+  };
+
   console.log("Incoming request:", {
     method: req.method,
     url: req.url,
     headers: Object.fromEntries([...req.headers.entries()].map(([k, v]) => [k, typeof v === 'string' && v.length > 100 ? v.substring(0, 100) + '...' : v]))
   });
   
+  // Handle OPTIONS requests immediately with CORS headers
+  if (req.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 204,
+      headers: responseHeaders
+    });
+  }
+  
   // Return appropriate handler based on method
   switch (req.method) {
-    case 'OPTIONS':
-      return handleOptions();
     case 'POST':
       return handlePost(req);
     case 'GET':
@@ -54,7 +65,7 @@ async function handleRequest(req: Request) {
     default:
       return new Response(`Method ${req.method} Not Allowed`, {
         status: 405,
-        headers: corsHeaders
+        headers: responseHeaders
       });
   }
 }

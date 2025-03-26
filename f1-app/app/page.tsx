@@ -7,11 +7,8 @@ import f1GPTLogo from "./assets/F1-logo.png"
 import { useChat, Message } from "ai/react"
 
 export default function Home() {
-  // Get the base URL for API requests
-  const baseUrl = process.env.NEXT_PUBLIC_VERCEL_URL 
-    ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`
-    : '';
-  const apiUrl = `${baseUrl}/api/chat`;
+  // Always use a relative URL for API requests to avoid cross-origin issues
+  const apiUrl = '/api/chat';
   
   console.log("Using API URL:", apiUrl);
   
