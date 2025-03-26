@@ -1,6 +1,6 @@
-import { Message, streamText } from 'ai'
-import { openai } from '@ai-sdk/openai'
+import { Message } from 'ai'
 import { DataAPIClient } from "@datastax/astra-db-ts"
+import OpenAI from 'openai'
 
 // CORS headers
 const corsHeaders = {
@@ -34,6 +34,11 @@ async function getContext(message: string) {
   }
 
   try {
+    // Initialize OpenAI client for embeddings
+    const openAIClient = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY
+    })
+    
     // Setup AstraDB client
     const client = new DataAPIClient(process.env.ASTRA_DB_APPLICATION_TOKEN)
     const db = client.db(process.env.ASTRA_DB_API_ENDPOINT, {
@@ -41,14 +46,17 @@ async function getContext(message: string) {
     })
     const collection = await db.collection(process.env.ASTRADB_DB_COLLECTION)
     
-    // Create OpenAI client for embeddings
-    const openaiClient = new OpenAIEmbeddings(process.env.OPENAI_API_KEY)
-    const embedding = await openaiClient.embed(message)
+    // Generate embeddings
+    const embedding = await openAIClient.embeddings.create({
+      model: 'text-embedding-3-small',
+      input: message,
+      encoding_format: 'float'
+    })
     
     // Query the vector database
     const cursor = collection.find(null, {
       sort: {
-        $vector: embedding
+        $vector: embedding.data[0].embedding
       },
       limit: 5
     })
@@ -68,40 +76,52 @@ async function getContext(message: string) {
   }
 }
 
-// OpenAI Embeddings class to handle embedding generation
-class OpenAIEmbeddings {
-  apiKey: string
-  
-  constructor(apiKey: string) {
-    this.apiKey = apiKey
-  }
-  
-  async embed(text: string): Promise<number[]> {
-    const openaiClient = new (await import('openai')).default({
-      apiKey: this.apiKey
-    })
-    
-    const embedding = await openaiClient.embeddings.create({
-      model: 'text-embedding-3-small',
-      input: text,
-      encoding_format: 'float'
-    })
-    
-    return embedding.data[0].embedding
-  }
-}
-
 export async function POST(req: Request) {
   try {
-    const { messages } = await req.json()
+    // Initialize OpenAI with API key
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error('OPENAI_API_KEY environment variable is not set')
+    }
+    
+    const openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY
+    })
+    
+    // Parse JSON request body
+    let messages
+    try {
+      const body = await req.json()
+      messages = body.messages
+      
+      if (!messages || !Array.isArray(messages)) {
+        throw new Error('Invalid messages format')
+      }
+    } catch (error) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid request body' }),
+        {
+          status: 400,
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json'
+          }
+        }
+      )
+    }
     
     // Get the last message for context retrieval
     const lastMessage = messages[messages.length - 1]
     
     // Get context from AstraDB
-    const context = await getContext(lastMessage.content)
+    let context = ''
+    try {
+      context = await getContext(lastMessage.content)
+    } catch (error) {
+      console.error('Error getting context:', error)
+      // Continue without context on error
+    }
     
-    // Create system message
+    // Create system message with context
     const systemPrompt = {
       role: "system",
       content: `You are an AI assistant who knows everything about Formula 1.
@@ -116,23 +136,59 @@ export async function POST(req: Request) {
       Format responses using markdown where applicable and don't return images.`
     }
     
-    // Use streamText from AI SDK to generate the response
-    const response = await streamText({
-      model: openai('gpt-4'),
-      messages: [
-        systemPrompt,
-        ...messages.filter((message: Message) => message.role === "user")
-      ]
-    })
+    // Format response for AI SDK compatibility
+    const formatToAISDKResponse = (text: string) => {
+      return `data: ${JSON.stringify({ text })}\n\n`
+    }
     
-    // Convert the response to a data stream with CORS headers
-    return response.toDataStreamResponse({
-      headers: corsHeaders
-    })
+    // Generate response
+    try {
+      // Create the streaming response
+      const response = await openai.chat.completions.create({
+        model: 'gpt-4',
+        messages: [systemPrompt, ...messages],
+        stream: true,
+      })
+      
+      // Convert the response to a readable stream using the standard browser TextEncoder
+      const encoder = new TextEncoder()
+      const stream = new ReadableStream({
+        async start(controller) {
+          for await (const chunk of response) {
+            const content = chunk.choices[0]?.delta?.content || ''
+            if (content) {
+              controller.enqueue(encoder.encode(formatToAISDKResponse(content)))
+            }
+          }
+          
+          // End the stream
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+          controller.close()
+        }
+      })
+      
+      // Return the stream with SSE headers
+      return new Response(stream, {
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive'
+        }
+      })
+    } catch (error) {
+      console.error('OpenAI API error:', error)
+      throw new Error(`OpenAI API error: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
   } catch (error) {
     console.error('Error in chat API:', error)
+    // Return detailed error for debugging
     return new Response(
-      JSON.stringify({ error: 'Failed to process request' }),
+      JSON.stringify({ 
+        error: 'Failed to process request',
+        details: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
+      }),
       {
         status: 500,
         headers: {

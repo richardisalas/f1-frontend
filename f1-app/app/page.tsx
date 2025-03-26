@@ -25,6 +25,15 @@ export default function Home() {
     setMessages,
   } = useChat({
     api: '/api/chat',
+    onResponse: (response) => {
+      // Handle successful response
+      if (response.status === 200) {
+        setWaitingForFirstToken(false)
+      } else {
+        console.error('Error response:', response.status)
+        setDbError(`API responded with status: ${response.status}`)
+      }
+    },
     onError: (error) => {
       console.error('Chat error:', error)
       setDbError(error instanceof Error ? error.message : 'Failed to communicate with the server')
@@ -35,9 +44,9 @@ export default function Home() {
       setIsSubmitting(false)
       setWaitingForFirstToken(false)
     },
-    // Only send user messages to the API
+    // Configure to match our backend format
     body: {
-      // Include empty object for any additional params
+      // Any additional parameters
     }
   })
 
@@ -70,16 +79,23 @@ export default function Home() {
     
     // Then trigger the form submission after a small delay
     setTimeout(() => {
-      console.log("Submitting form with:", example);
-      const event = new Event('submit', { bubbles: true, cancelable: true });
-      formRef.current?.dispatchEvent(event);
+      if (formRef.current) {
+        console.log("Submitting form with:", example);
+        const event = new Event('submit', { bubbles: true, cancelable: true });
+        formRef.current.dispatchEvent(event);
+      }
     }, 150);
   }
 
   // Handle form submission
   const onFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    
+    // Validate input
     if (!input.trim() || isSubmitting) return
+    
+    // Clear previous errors
+    setDbError(null)
     
     console.log('Form submitted with:', input)
     setIsSubmitting(true)
