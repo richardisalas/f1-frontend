@@ -67,40 +67,30 @@ export default function Home() {
         {/* Messages area */}
         <div className="flex-1 overflow-y-auto">
           {messages.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center px-4 py-12">
-              <div className="mb-8">
-                <Image src={f1GPTLogo} alt="GrandPrixGPT Logo" width={120} height={120} className="rounded-xl" />
+            <div className="flex h-full flex-col items-center justify-center px-4 py-8">
+              <div className="mb-6">
+                <Image src={f1GPTLogo} alt="GrandPrixGPT Logo" width={100} height={100} className="rounded-xl" />
               </div>
-              <h2 className="mb-4 text-center text-2xl font-semibold text-gray-800">Welcome to GrandPrixGPT</h2>
-              <p className="mb-6 max-w-md text-center text-gray-600">
+              <h2 className="mb-3 text-center text-2xl font-semibold text-gray-800">Welcome to GrandPrixGPT</h2>
+              <p className="mb-8 max-w-md text-center text-gray-600">
                 The ultimate place for Formula 1 super fans! Ask GrandPrixGPT anything about the sport, 
                 from the latest news to the history of the sport.
               </p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-2xl px-4">
-                <button
-                  className="rounded-lg border border-gray-200 bg-white p-4 text-left hover:bg-gray-50"
-                  onClick={() => handleExampleClick("Tell me about the latest F1 race results")}
-                >
-                  Tell me about the latest F1 race results
-                </button>
-                <button
-                  className="rounded-lg border border-gray-200 bg-white p-4 text-left hover:bg-gray-50"
-                  onClick={() => handleExampleClick("Who is the current world champion?")}
-                >
-                  Who is the current world champion?
-                </button>
-                <button
-                  className="rounded-lg border border-gray-200 bg-white p-4 text-left hover:bg-gray-50"
-                  onClick={() => handleExampleClick("Explain DRS and how it works")}
-                >
-                  Explain DRS and how it works
-                </button>
-                <button
-                  className="rounded-lg border border-gray-200 bg-white p-4 text-left hover:bg-gray-50"
-                  onClick={() => handleExampleClick("What are the biggest rule changes this season?")}
-                >
-                  What are the biggest rule changes this season?
-                </button>
+              <div className="grid max-w-2xl grid-cols-1 gap-3 sm:grid-cols-2 w-full px-4">
+                {[
+                  "Tell me about the latest F1 race results",
+                  "Who is the current world champion?",
+                  "Explain DRS and how it works",
+                  "What are the biggest rule changes this season?",
+                ].map((example, i) => (
+                  <button
+                    key={i}
+                    onClick={() => handleExampleClick(example)}
+                    className="rounded-lg border border-gray-200 bg-white p-3 text-left text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+                  >
+                    {example}
+                  </button>
+                ))}
               </div>
             </div>
           ) : (
