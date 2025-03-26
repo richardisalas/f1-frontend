@@ -15,7 +15,15 @@ export default function Home() {
     },
     headers: {
       'Content-Type': 'application/json',
+      'Accept': 'text/event-stream',
     },
+    body: {
+      // Add any additional configuration needed for the API
+      config: {
+        temperature: 0.7,
+        stream: true,
+      }
+    }
   })
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const formRef = useRef<HTMLFormElement>(null)

@@ -3,6 +3,17 @@ import { OpenAIStream, StreamingTextResponse } from "ai"
 import { DataAPIClient } from "@datastax/astra-db-ts"
 import { NextResponse } from "next/server"
 
+const corsHeaders = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Date, X-Api-Version",
+    "Access-Control-Allow-Credentials": "true",
+};
+
+export async function OPTIONS() {
+    return NextResponse.json({}, { headers: corsHeaders });
+}
+
 const {
     ASTRADB_DB_NAMESPACE,
     ASTRADB_DB_COLLECTION,
@@ -20,18 +31,6 @@ const db = client.db(ASTRADB_DB_ENDPOINT, { namespace: ASTRADB_DB_NAMESPACE })
 
 export const runtime = 'edge'
 
-// Handle OPTIONS requests for CORS
-export async function OPTIONS() {
-    return new Response(null, {
-        status: 200,
-        headers: {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-        },
-    })
-}
-
 // Handle GET requests
 export async function GET() {
     return NextResponse.json({ message: "Please use POST method for chat requests" }, { status: 405 })
@@ -39,6 +38,11 @@ export async function GET() {
 
 // Handle POST requests
 export async function POST(req: Request) {
+    // Add CORS headers to the response
+    if (req.method === 'OPTIONS') {
+        return new Response(null, { headers: corsHeaders });
+    }
+
     try {
         console.log("API route called with request:", req.url);
         
@@ -136,7 +140,14 @@ export async function POST(req: Request) {
         })
 
         const stream = OpenAIStream(response)
-        return new StreamingTextResponse(stream)
+        return new StreamingTextResponse(stream, {
+            headers: {
+                ...corsHeaders,
+                'Content-Type': 'text/event-stream',
+                'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive',
+            }
+        });
         
     } catch (error) {
         console.error("Error in chat API route:", error);
@@ -166,6 +177,7 @@ export async function POST(req: Request) {
             {
                 status: statusCode,
                 headers: {
+                    ...corsHeaders,
                     "Content-Type": "application/json",
                 },
             }
