@@ -22,12 +22,12 @@ const {
 
 // Initialize OpenAI
 const openai = new OpenAI({
-    apiKey: OPENAI_API_KEY
+    apiKey: OPENAI_API_KEY || ""
 })
 
-// Initialize AstraDB client
-const client = new DataAPIClient(ASTRA_DB_APPLICATION_TOKEN)
-const db = client.db(ASTRA_DB_API_ENDPOINT, { namespace: ASTRADB_DB_NAMESPACE })
+// Initialize AstraDB client if credentials are available
+const client = ASTRA_DB_APPLICATION_TOKEN ? new DataAPIClient(ASTRA_DB_APPLICATION_TOKEN) : null
+const db = client && ASTRA_DB_API_ENDPOINT ? client.db(ASTRA_DB_API_ENDPOINT, { namespace: ASTRADB_DB_NAMESPACE || "default_keyspace" }) : null
 
 export const runtime = 'edge'
 
@@ -90,25 +90,29 @@ export async function POST(req: Request) {
             })
             console.log("Created embeddings successfully");
 
-            const collection = await db.collection(ASTRADB_DB_COLLECTION)
-            const cursor = collection.find(null, {
-                sort: {
-                    $vector: embedding.data[0].embedding,
-                },
-                limit: 10
-            })  
+            if (db && ASTRADB_DB_COLLECTION) {
+                const collection = await db.collection(ASTRADB_DB_COLLECTION)
+                const cursor = collection.find(null, {
+                    sort: {
+                        $vector: embedding.data[0].embedding,
+                    },
+                    limit: 10
+                })  
 
-            const documents = await cursor.toArray()
-            console.log("Retrieved documents count:", documents?.length || 0)
-            
-            const docsMap = documents?.map(doc => doc.text)
-            docContext = JSON.stringify(docsMap)
-            
-            console.log("docContext (first 200 chars):", docContext.substring(0, 200))
-            console.log("docContext length:", docContext.length)
-            
-            if (docContext.length < 5) {
-                console.warn("Warning: Empty or very small docContext. Database may be empty or query returned no results.")
+                const documents = await cursor.toArray()
+                console.log("Retrieved documents count:", documents?.length || 0)
+                
+                const docsMap = documents?.map(doc => doc.text)
+                docContext = JSON.stringify(docsMap)
+                
+                console.log("docContext (first 200 chars):", docContext.substring(0, 200))
+                console.log("docContext length:", docContext.length)
+                
+                if (docContext.length < 5) {
+                    console.warn("Warning: Empty or very small docContext. Database may be empty or query returned no results.")
+                }
+            } else {
+                console.warn("Database not initialized. Using empty context.")
             }
         } catch (error) {
             console.error("Error querying database:", error)
@@ -139,15 +143,48 @@ export async function POST(req: Request) {
         }
         
         // Generate AI response
-        const response = await openai.chat.completions.create({
-            model: "gpt-4",
-            messages: [template, ...messages],
-            stream: true
-        })
-
-        // Stream the response
-        const stream = OpenAIStream(response)
-        return new StreamingTextResponse(stream, { headers });
+        console.log("About to call OpenAI API with model: gpt-4");
+        console.log("Message count being sent:", messages.length + 1); // +1 for template
+        console.log("Template content length:", template.content.length);
+        
+        // Log message structure (but truncate content for brevity)
+        const debugMessages = [template, ...messages].map(msg => ({
+            role: msg.role,
+            contentLength: msg.content.length,
+            contentPreview: msg.content.substring(0, 100) + '...' // Show just first 100 chars
+        }));
+        console.log("Message structure:", JSON.stringify(debugMessages, null, 2));
+        
+        try {
+            console.log("Starting OpenAI API call...");
+            const response = await openai.chat.completions.create({
+                model: "gpt-4",
+                messages: [template, ...messages],
+                stream: true,
+            });
+            console.log("OpenAI API call successful, preparing stream");
+            
+            // Stream the response
+            const stream = OpenAIStream(response);
+            console.log("Stream prepared, sending response");
+            return new StreamingTextResponse(stream, { headers });
+        } catch (openaiError) {
+            console.error("OpenAI API call failed:", openaiError);
+            
+            // Analyze common OpenAI error patterns
+            const errorStr = String(openaiError);
+            if (errorStr.includes("rate limit")) {
+                console.error("OpenAI API rate limit exceeded");
+            } else if (errorStr.includes("timeout")) {
+                console.error("OpenAI API request timed out");
+            } else if (errorStr.includes("exceeded maximum token")) {
+                console.error("OpenAI API token limit exceeded");
+            } else if (errorStr.includes("429")) {
+                console.error("OpenAI API returned a 429 status (Too Many Requests)");
+            }
+            
+            throw openaiError; // Re-throw to be caught by outer catch block
+        }
         
     } catch (error) {
         // Handle errors
@@ -155,14 +192,24 @@ export async function POST(req: Request) {
         
         let errorMessage = "Failed to process chat request";
         let statusCode = 500;
+        let errorDetails = {};
         
         if (error instanceof Error) {
             errorMessage = error.message;
+            errorDetails = { 
+                name: error.name,
+                stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+            };
             
             if (errorMessage.includes("API key")) {
                 statusCode = 401;
             } else if (errorMessage.includes("Invalid") || errorMessage.includes("No message")) {
                 statusCode = 400;
+            } else if (errorMessage.includes("rate limit") || errorMessage.includes("429")) {
+                statusCode = 429;
+                errorMessage = "OpenAI API rate limit exceeded. Please try again later.";
+            } else if (errorMessage.includes("timeout")) {
+                errorMessage = "Request to OpenAI API timed out. Please try again.";
             }
         }
         
@@ -173,7 +220,8 @@ export async function POST(req: Request) {
                 details: {
                     dbConnected: !!client && !!db,
                     hasOpenAIKey: !!OPENAI_API_KEY,
-                    hasAstraDBConfig: !!(ASTRADB_DB_NAMESPACE && ASTRADB_DB_COLLECTION && ASTRA_DB_API_ENDPOINT && ASTRA_DB_APPLICATION_TOKEN)
+                    hasAstraDBConfig: !!(ASTRADB_DB_NAMESPACE && ASTRADB_DB_COLLECTION && ASTRA_DB_API_ENDPOINT && ASTRA_DB_APPLICATION_TOKEN),
+                    errorDetails: errorDetails
                 }
             }), 
             {
