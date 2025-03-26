@@ -11,6 +11,14 @@ module.exports = {
         f1Blue: "#0077C8",
         f1Red: "#FF0000",
       },
+      maxWidth: {
+        '8xl': '88rem',
+      },
+      spacing: {
+        '18': '4.5rem',
+        '112': '28rem',
+        '128': '32rem',
+      },
       typography: {
         DEFAULT: {
           css: {

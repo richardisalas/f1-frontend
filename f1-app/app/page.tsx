@@ -3,14 +3,22 @@
 import { useState, useRef, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import f1GPTLogo from "./assests/F1-logo.png"
+import f1GPTLogo from "./assets/F1-logo.png"
 import { useChat } from "ai/react"
 
 export default function Home() {
-  const { messages, input, handleInputChange, handleSubmit, isLoading, setInput, setMessages } = useChat()
+  const { messages, input, handleInputChange, handleSubmit, isLoading, setInput, setMessages, error } = useChat({
+    api: '/api/chat',
+    onError: (err) => {
+      console.error("Chat error:", err);
+      // Add a UI notification about the error
+      setDbError(`Connection error: ${err.message || 'Unknown error'}`);
+    }
+  })
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const formRef = useRef<HTMLFormElement>(null)
   const [waitingForFirstToken, setWaitingForFirstToken] = useState(false)
+  const [dbError, setDbError] = useState<string | null>(null)
 
   // Scroll to bottom whenever messages change
   useEffect(() => {
@@ -35,138 +43,196 @@ export default function Home() {
 
   // Function to handle example clicks
   const handleExampleClick = (example: string) => {
+    console.log("Example clicked:", example);
+    // First set the input
     setInput(example)
+    
+    // Then trigger the form submission after a small delay
     setTimeout(() => {
-      if (formRef.current) {
-        formRef.current.dispatchEvent(
-          new Event('submit', { cancelable: true, bubbles: true })
-        )
-      }
-    }, 100)
+      console.log("Submitting form with:", example);
+      const event = new Event('submit', { bubbles: true, cancelable: true });
+      formRef.current?.dispatchEvent(event);
+    }, 150);
+  }
+
+  // Manual form submission function
+  const onFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    console.log("Form submitted with:", input);
+    handleSubmit(e);
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-white">
+    <div className="min-h-screen flex flex-col bg-[#f7f7f8]">
       {/* Header */}
-      <header className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3 shadow-sm">
+      <header className="app-header sticky top-0 z-10">
         <Link 
           href="/" 
-          className="flex items-center space-x-2 hover:opacity-80 transition-opacity"
+          className="flex items-center hover:opacity-80 transition-opacity no-underline"
           onClick={() => {
             setMessages([])
             setInput("")
           }}
         >
-          <Image src={f1GPTLogo} alt="GrandPrixGPT Logo" width={40} height={40} className="rounded-lg" />
-          <h1 className="text-xl font-semibold text-[#0077C8]">GrandPrixGPT</h1>
+          <Image 
+            src={f1GPTLogo} 
+            alt="F1 Logo" 
+            width={42} 
+            height={42} 
+            className="logo-image" 
+          />
+          <h1 className="app-title">GrandPrixGPT</h1>
         </Link>
       </header>
 
       {/* Main content */}
-      <main className="flex flex-1 flex-col bg-white">
-        {/* Messages area */}
-        <div className="flex-1 overflow-y-auto">
-          {messages.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center px-4 py-8">
-              <div className="mb-6">
-                <Image src={f1GPTLogo} alt="GrandPrixGPT Logo" width={100} height={100} className="rounded-xl" />
-              </div>
-              <h2 className="mb-3 text-center text-2xl font-semibold text-gray-800">Welcome to GrandPrixGPT</h2>
-              <p className="mb-8 max-w-md text-center text-gray-600">
-                The ultimate place for Formula 1 super fans! Ask GrandPrixGPT anything about the sport, 
-                from the latest news to the history of the sport.
-              </p>
-              <div className="grid max-w-2xl grid-cols-1 gap-3 sm:grid-cols-2 w-full px-4">
-                {[
-                  "Tell me about the latest F1 race results",
-                  "Who is the current world champion?",
-                  "Explain DRS and how it works",
-                  "What are the biggest rule changes this season?",
-                ].map((example, i) => (
-                  <button
-                    key={i}
-                    onClick={() => handleExampleClick(example)}
-                    className="rounded-lg border border-gray-200 bg-white p-3 text-left text-sm text-gray-600 hover:bg-gray-50 transition-colors"
-                  >
-                    {example}
-                  </button>
-                ))}
-              </div>
+      <main className="flex-1 overflow-y-auto">
+        {messages.length === 0 ? (
+          <div className="welcome-container h-[calc(100vh-90px)] flex flex-col items-center justify-center py-6">
+            <div className="logo-container mb-3">
+              <Image 
+                src={f1GPTLogo} 
+                alt="GrandPrixGPT Logo" 
+                width={180} 
+                height={180} 
+                className="welcome-logo" 
+              />
             </div>
-          ) : (
-            <div className="space-y-4 px-4 py-8 max-w-5xl mx-auto">
-              {messages.map((message, i) => (
-                <div
-                  key={i}
-                  className={`flex ${
-                    message.role === "user" ? "justify-end" : "justify-start"
-                  }`}
-                >
-                  <div
-                    className={`rounded-lg px-4 py-2 max-w-[85%] ${
-                      message.role === "user"
-                        ? "bg-[#0077C8] text-white"
-                        : "bg-gray-100 text-gray-900"
-                    }`}
-                  >
+            
+            <h2 className="welcome-title">Welcome to GrandPrixGPT</h2>
+            
+            <p className="welcome-text">
+              The ultimate place for Formula 1 super fans! Ask<br />
+              GrandPrixGPT anything about the sport, from the latest<br />
+              news to the history of the sport.
+            </p>
+            
+            <div className="examples-grid">
+              <button
+                className="example-button"
+                onClick={() => handleExampleClick("Tell me about the latest F1 race results")}
+              >
+                Tell me about the latest F1 race results
+              </button>
+              <button
+                className="example-button"
+                onClick={() => handleExampleClick("Who is the current world champion?")}
+              >
+                Who is the current world champion?
+              </button>
+              <button
+                className="example-button"
+                onClick={() => handleExampleClick("Explain DRS and how it works")}
+              >
+                Explain DRS and how it works
+              </button>
+              <button
+                className="example-button"
+                onClick={() => handleExampleClick("What are the biggest rule changes this season?")}
+              >
+                What are the biggest rule changes this season?
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div>
+            {error && (
+              <div className="message-container assistant">
+                <div className="message-content">
+                  <div className="message text-red-500">
+                    Error: Unable to communicate with the AI service. Please check your API keys and try again.
+                    {dbError && <div className="mt-2 text-sm">{dbError}</div>}
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {messages.map((message, i) => (
+              <div
+                key={i}
+                className={`message-container ${message.role === "user" ? "user" : "assistant"}`}
+              >
+                <div className="message-content">
+                  <div className="message">
                     {message.content}
                   </div>
                 </div>
-              ))}
-              {waitingForFirstToken && (
-                <div className="flex justify-start">
-                  <div className="rounded-lg px-4 py-2 max-w-[85%] bg-gray-100">
-                    <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#0077C8] border-t-transparent"></div>
+              </div>
+            ))}
+            
+            {/* Loading spinner - only show when waiting for first token */}
+            {waitingForFirstToken && (
+              <div className="message-container assistant">
+                <div className="message-content">
+                  <div className="flex">
+                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#7e22ce] border-t-transparent"></div>
                   </div>
                 </div>
-              )}
-              <div ref={messagesEndRef} />
-            </div>
-          )}
-        </div>
-
-        {/* Input area */}
-        <div className="border-t border-gray-200 bg-white px-4 py-2">
-          <div className="mx-auto max-w-5xl">
-            <form ref={formRef} onSubmit={handleSubmit} className="relative">
-              <input
-                type="text"
-                value={input}
-                onChange={handleInputChange}
-                placeholder="Ask anything about Formula 1..."
-                className="w-full rounded-lg border border-gray-200 px-4 py-2 pr-16 focus:border-[#0077C8] focus:outline-none focus:ring-2 focus:ring-[#0077C8]/50"
-              />
-              <button
-                type="submit"
-                disabled={isLoading || !input.trim()}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md bg-[#0077C8] p-1.5 text-white transition-colors disabled:bg-gray-300"
-              >
-                {waitingForFirstToken ? (
-                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-                ) : (
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    className="h-5 w-5"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M13 5l7 7-7 7M5 5l7 7-7 7"
-                    />
-                  </svg>
-                )}
-              </button>
-            </form>
-            <p className="mt-2 text-center text-xs text-gray-500">
-              Powered by GPT-4 and Formula 1 knowledge
-            </p>
+              </div>
+            )}
+            
+            <div ref={messagesEndRef} />
           </div>
-        </div>
+        )}
       </main>
+
+      {/* Input area */}
+      <div className="input-container">
+        <form ref={formRef} onSubmit={onFormSubmit} className="input-form">
+          <div className="relative">
+            <textarea
+              value={input}
+              onChange={handleInputChange}
+              placeholder="Ask anything about Formula 1..."
+              className="chat-input"
+              rows={1}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  if (input.trim() && !isLoading) {
+                    onFormSubmit(e as any);
+                  }
+                }
+              }}
+            />
+            <button
+              type="submit"
+              disabled={isLoading || !input.trim()}
+              className="send-button"
+            >
+              {waitingForFirstToken ? (
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+              ) : (
+                <svg 
+                  width="16" 
+                  height="16" 
+                  viewBox="0 0 24 24" 
+                  fill="none" 
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path 
+                    d="M22 2L11 13"
+                    stroke="currentColor" 
+                    strokeWidth="2" 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round"
+                  />
+                  <path 
+                    d="M22 2L15 22L11 13L2 9L22 2Z" 
+                    stroke="currentColor" 
+                    strokeWidth="2" 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              )}
+            </button>
+          </div>
+          <p className="footer-text mt-2">
+            Powered by GPT-4 and Formula 1 knowledge
+          </p>
+        </form>
+      </div>
     </div>
   )
 }
