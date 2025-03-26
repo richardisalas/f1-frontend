@@ -7,12 +7,23 @@ import f1GPTLogo from "./assets/F1-logo.png"
 import { useChat } from 'ai/react'
 
 export default function Home() {
-  // Always use a relative URL for API requests to avoid cross-origin issues
-  const apiUrl = '/api/chat';
-  
-  console.log("Using API URL:", apiUrl);
-  
-  const { messages, input, handleInputChange, handleSubmit, isLoading, error, setInput, setMessages } = useChat({
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const formRef = useRef<HTMLFormElement>(null)
+  const [waitingForFirstToken, setWaitingForFirstToken] = useState(false)
+  const [dbError, setDbError] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // Use the chat hook with minimal configuration
+  const {
+    messages,
+    input,
+    handleInputChange,
+    handleSubmit,
+    isLoading,
+    error,
+    setInput,
+    setMessages,
+  } = useChat({
     api: '/api/chat',
     onError: (error) => {
       console.error('Chat error:', error)
@@ -23,13 +34,12 @@ export default function Home() {
     onFinish: () => {
       setIsSubmitting(false)
       setWaitingForFirstToken(false)
+    },
+    // Only send user messages to the API
+    body: {
+      // Include empty object for any additional params
     }
   })
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-  const formRef = useRef<HTMLFormElement>(null)
-  const [waitingForFirstToken, setWaitingForFirstToken] = useState(false)
-  const [dbError, setDbError] = useState<string | null>(null)
-  const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Scroll to bottom whenever messages change
   useEffect(() => {
@@ -67,24 +77,16 @@ export default function Home() {
   }
 
   // Handle form submission
-  const onFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const onFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (!input.trim() || isSubmitting) return
     
-    try {
-      console.log('Form submitted with:', input)
-      setIsSubmitting(true)
-      setWaitingForFirstToken(true)
-      
-      // Use the SDK's handleSubmit
-      handleSubmit(e)
-      
-      // Clear the input field
-      setInput("")
-    } catch (error) {
-      console.error('Error submitting form:', error)
-      setDbError(error instanceof Error ? error.message : 'Failed to submit message')
-    }
+    console.log('Form submitted with:', input)
+    setIsSubmitting(true)
+    setWaitingForFirstToken(true)
+    
+    // Use the handleSubmit directly from the useChat hook
+    handleSubmit(e)
   }
 
   return (
