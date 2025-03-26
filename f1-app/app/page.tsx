@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import f1GPTLogo from "./assets/F1-logo.png"
-import { useChat } from "ai/react"
+import { useChat, Message } from "ai/react"
 
 export default function Home() {
   const { messages, input, handleInputChange, handleSubmit, isLoading, setInput, setMessages, error } = useChat({
@@ -29,6 +29,7 @@ export default function Home() {
   const formRef = useRef<HTMLFormElement>(null)
   const [waitingForFirstToken, setWaitingForFirstToken] = useState(false)
   const [dbError, setDbError] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Scroll to bottom whenever messages change
   useEffect(() => {
@@ -65,17 +66,83 @@ export default function Home() {
     }, 150);
   }
 
-  // Manual form submission function
+  // Custom form submission function
   const onFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!input.trim() || isLoading) return;
+    if (!input.trim() || isSubmitting) return;
     
     try {
       console.log("Form submitted with:", input);
-      await handleSubmit(e);
+      setIsSubmitting(true);
+      setWaitingForFirstToken(true);
+      
+      // Add the user message immediately to the UI
+      const userMessage: Message = { id: Date.now().toString(), role: 'user', content: input };
+      const newMessages = [...messages, userMessage];
+      setMessages(newMessages);
+      
+      // Clear input
+      const currentInput = input;
+      setInput("");
+      
+      // Use fetch directly
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: newMessages,
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Server responded with ${response.status}: ${await response.text()}`);
+      }
+      
+      // Handle streaming response
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("Response body is not readable");
+      
+      let assistantMessage: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: '' };
+      
+      // Add empty assistant message
+      setMessages([...newMessages, assistantMessage]);
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        // Decode the chunk
+        const chunk = new TextDecoder().decode(value);
+        
+        // Parse SSE message and update content
+        const chunks = chunk.split('\n\n').filter(Boolean);
+        for (const chunk of chunks) {
+          if (chunk.startsWith('data: ')) {
+            const data = chunk.replace('data: ', '');
+            if (data === '[DONE]') continue;
+            
+            try {
+              const parsed = JSON.parse(data);
+              const content = parsed.choices[0]?.delta?.content || '';
+              
+              // Update the assistant message with the new content
+              assistantMessage.content += content;
+              setMessages([...newMessages, { ...assistantMessage }]);
+              setWaitingForFirstToken(false);
+            } catch (e) {
+              console.error('Error parsing SSE data:', e);
+            }
+          }
+        }
+      }
     } catch (error) {
       console.error("Error submitting form:", error);
       setDbError(error instanceof Error ? error.message : "Failed to submit message");
+    } finally {
+      setIsSubmitting(false);
+      setWaitingForFirstToken(false);
     }
   }
 

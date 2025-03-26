@@ -3,22 +3,15 @@ import { OpenAIStream, StreamingTextResponse } from "ai"
 import { DataAPIClient } from "@datastax/astra-db-ts"
 import { NextResponse } from "next/server"
 
+// CORS headers to allow requests from any origin
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Date, X-Api-Version",
-    "Access-Control-Allow-Credentials": "true",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
     "Access-Control-Max-Age": "86400",
 };
 
-// Handle OPTIONS requests for CORS
-export async function OPTIONS(request: Request) {
-    return new Response(null, {
-        status: 204,
-        headers: corsHeaders
-    });
-}
-
+// Environment variables
 const {
     ASTRADB_DB_NAMESPACE,
     ASTRADB_DB_COLLECTION,
@@ -27,23 +20,28 @@ const {
     OPENAI_API_KEY
 } = process.env
 
+// Initialize OpenAI
 const openai = new OpenAI({
     apiKey: OPENAI_API_KEY
 })
 
+// Initialize AstraDB client
 const client = new DataAPIClient(ASTRA_DB_APPLICATION_TOKEN)
 const db = client.db(ASTRADB_DB_ENDPOINT, { namespace: ASTRADB_DB_NAMESPACE })
 
 export const runtime = 'edge'
 
-// Handle GET requests
-export async function GET() {
-    return NextResponse.json({ message: "Please use POST method for chat requests" }, { status: 405 })
+// Handle preflight requests
+export async function OPTIONS() {
+    return new Response(null, {
+        status: 204,
+        headers: corsHeaders
+    });
 }
 
-// Handle POST requests
+// Main API handler
 export async function POST(req: Request) {
-    // Add CORS headers to all responses
+    // Define response headers
     const headers = {
         ...corsHeaders,
         'Content-Type': 'text/event-stream',
@@ -52,8 +50,10 @@ export async function POST(req: Request) {
     };
 
     try {
+        // Log request info
         console.log("API route called with request:", req.url);
         
+        // Validate environment variables
         if (!OPENAI_API_KEY) {
             throw new Error("OpenAI API key is not configured");
         }
@@ -62,7 +62,9 @@ export async function POST(req: Request) {
             throw new Error("Database configuration is incomplete");
         }
 
-        const { messages } = await req.json();
+        // Parse the request body
+        const body = await req.json();
+        const { messages } = body;
         
         if (!messages || !Array.isArray(messages) || messages.length === 0) {
             throw new Error("Invalid messages format");
@@ -70,6 +72,7 @@ export async function POST(req: Request) {
 
         console.log("Received messages:", messages.length);
         
+        // Extract the latest user message
         const latestMessage = messages[messages.length - 1]?.content;
         if (!latestMessage) {
             throw new Error("No message content found");
@@ -77,16 +80,16 @@ export async function POST(req: Request) {
 
         console.log("Latest message:", latestMessage);
 
+        // Get context from vector database
         let docContext = ""
-
-        const embedding = await openai.embeddings.create({
-            model: "text-embedding-3-small",
-            input: latestMessage,
-            encoding_format: "float"
-        })
-        console.log("Created embeddings successfully");
-
         try {
+            const embedding = await openai.embeddings.create({
+                model: "text-embedding-3-small",
+                input: latestMessage,
+                encoding_format: "float"
+            })
+            console.log("Created embeddings successfully");
+
             const collection = await db.collection(ASTRADB_DB_COLLECTION)
             const cursor = collection.find(null, {
                 sort: {
@@ -112,13 +115,7 @@ export async function POST(req: Request) {
             docContext = ""
         }
         
-        console.log("Database connection status:", !!client && !!db ? "Connected" : "Not connected")
-        console.log("Database details:", {
-            namespace: ASTRADB_DB_NAMESPACE,
-            collection: ASTRADB_DB_COLLECTION,
-            endpoint: ASTRADB_DB_ENDPOINT?.substring(0, 20) + "...", // Truncate for security
-        })
-        
+        // Create system prompt with context
         const template = {
             role: "system",
             content: `You are an AI assistant who knows everything about Formula 1. 
@@ -141,16 +138,19 @@ export async function POST(req: Request) {
             `
         }
         
+        // Generate AI response
         const response = await openai.chat.completions.create({
             model: "gpt-4",
             messages: [template, ...messages],
             stream: true
         })
 
+        // Stream the response
         const stream = OpenAIStream(response)
         return new StreamingTextResponse(stream, { headers });
         
     } catch (error) {
+        // Handle errors
         console.error("Error in chat API route:", error);
         
         let errorMessage = "Failed to process chat request";
@@ -166,6 +166,7 @@ export async function POST(req: Request) {
             }
         }
         
+        // Return error response
         return new Response(
             JSON.stringify({ 
                 error: errorMessage,
