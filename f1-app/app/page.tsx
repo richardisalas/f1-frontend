@@ -45,8 +45,8 @@ export default function Home() {
     }, 100)
   }
 
-    return (
-    <div className="flex min-h-screen flex-col bg-[#f7f7f8]">
+  return (
+    <div className="flex flex-col min-h-screen bg-white">
       {/* Header */}
       <header className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3 shadow-sm">
         <Link 
@@ -63,7 +63,7 @@ export default function Home() {
       </header>
 
       {/* Main content */}
-      <main className="flex flex-1 flex-col">
+      <main className="flex flex-1 flex-col bg-white">
         {/* Messages area */}
         <div className="flex-1 overflow-y-auto">
           {messages.length === 0 ? (
@@ -76,73 +76,75 @@ export default function Home() {
                 The ultimate place for Formula 1 super fans! Ask GrandPrixGPT anything about the sport, 
                 from the latest news to the history of the sport.
               </p>
-              <div className="grid max-w-3xl grid-cols-1 gap-4 sm:grid-cols-2">
-                {[
-                  "Tell me about the latest F1 race results",
-                  "Who is the current world champion?",
-                  "Explain DRS and how it works",
-                  "What are the biggest rule changes this season?",
-                ].map((example, i) => (
-                  <button
-                    key={i}
-                    className="rounded-xl border border-gray-200 bg-white p-4 text-left shadow-sm transition-all hover:border-[#0077C8]/40 hover:bg-blue-50"
-                    onClick={() => handleExampleClick(example)}
-                  >
-                    <span className="text-sm text-gray-700">{example}</span>
-                  </button>
-                ))}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-2xl px-4">
+                <button
+                  className="rounded-lg border border-gray-200 bg-white p-4 text-left hover:bg-gray-50"
+                  onClick={() => handleExampleClick("Tell me about the latest F1 race results")}
+                >
+                  Tell me about the latest F1 race results
+                </button>
+                <button
+                  className="rounded-lg border border-gray-200 bg-white p-4 text-left hover:bg-gray-50"
+                  onClick={() => handleExampleClick("Who is the current world champion?")}
+                >
+                  Who is the current world champion?
+                </button>
+                <button
+                  className="rounded-lg border border-gray-200 bg-white p-4 text-left hover:bg-gray-50"
+                  onClick={() => handleExampleClick("Explain DRS and how it works")}
+                >
+                  Explain DRS and how it works
+                </button>
+                <button
+                  className="rounded-lg border border-gray-200 bg-white p-4 text-left hover:bg-gray-50"
+                  onClick={() => handleExampleClick("What are the biggest rule changes this season?")}
+                >
+                  What are the biggest rule changes this season?
+                </button>
               </div>
             </div>
           ) : (
-            <div>
+            <div className="space-y-4 px-4 py-8 max-w-5xl mx-auto">
               {messages.map((message, i) => (
                 <div
                   key={i}
-                  className={`${
-                    message.role === "user" ? "bg-white" : "bg-[#f7f7f8]"
-                  } py-6`}
+                  className={`flex ${
+                    message.role === "user" ? "justify-end" : "justify-start"
+                  }`}
                 >
-                  <div className="mx-auto max-w-2xl px-4 sm:px-8">
-                    {message.role === "user" ? (
-                      <div className="flex justify-end">
-                        <div className="text-base text-gray-800 max-w-[80%] px-1">
-                          {message.content}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="text-base text-gray-800 leading-relaxed whitespace-pre-line max-w-[85%] px-1">
-                        {message.content}
-                      </div>
-                    )}
+                  <div
+                    className={`rounded-lg px-4 py-2 max-w-[85%] ${
+                      message.role === "user"
+                        ? "bg-[#0077C8] text-white"
+                        : "bg-gray-100 text-gray-900"
+                    }`}
+                  >
+                    {message.content}
                   </div>
                 </div>
               ))}
-              
-              {/* Loading spinner - only show when waiting for first token */}
               {waitingForFirstToken && (
-                <div className="py-6 bg-[#f7f7f8]">
-                  <div className="mx-auto max-w-2xl px-4 sm:px-8">
-                    <div className="flex">
-                      <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#0077C8] border-t-transparent"></div>
-                    </div>
+                <div className="flex justify-start">
+                  <div className="rounded-lg px-4 py-2 max-w-[85%] bg-gray-100">
+                    <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#0077C8] border-t-transparent"></div>
                   </div>
                 </div>
               )}
-              
               <div ref={messagesEndRef} />
             </div>
           )}
         </div>
 
         {/* Input area */}
-        <div className="border-t border-gray-200 bg-white p-4">
-          <form ref={formRef} onSubmit={handleSubmit} className="mx-auto max-w-2xl">
-            <div className="relative rounded-xl border border-gray-300 shadow-sm focus-within:border-[#0077C8] focus-within:ring-1 focus-within:ring-[#0077C8]">
+        <div className="border-t border-gray-200 bg-white px-4 py-2">
+          <div className="mx-auto max-w-5xl">
+            <form ref={formRef} onSubmit={handleSubmit} className="relative">
               <input
+                type="text"
                 value={input}
                 onChange={handleInputChange}
                 placeholder="Ask anything about Formula 1..."
-                className="w-full rounded-xl border-0 py-3 pl-4 pr-12 text-gray-900 focus:ring-0 sm:text-sm"
+                className="w-full rounded-lg border border-gray-200 px-4 py-2 pr-16 focus:border-[#0077C8] focus:outline-none focus:ring-2 focus:ring-[#0077C8]/50"
               />
               <button
                 type="submit"
@@ -168,13 +170,13 @@ export default function Home() {
                   </svg>
                 )}
               </button>
-            </div>
+            </form>
             <p className="mt-2 text-center text-xs text-gray-500">
               Powered by GPT-4 and Formula 1 knowledge
             </p>
-          </form>
+          </div>
         </div>
-        </main>
+      </main>
     </div>
-    )
+  )
 }

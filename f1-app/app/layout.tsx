@@ -5,7 +5,7 @@ import { Metadata } from "next"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-    title: "F1GPT",
+    title: "GrandPrixGPT",
     description: "The place to go for all your Formula One questions!"
 }
 
@@ -15,8 +15,8 @@ export default function RootLayout({
     children: React.ReactNode
 }) {
     return (
-        <html lang="en">
-            <body className={inter.className}>
+        <html lang="en" className="light">
+            <body className="bg-white min-h-screen">
                 {children}
             </body>
         </html>
