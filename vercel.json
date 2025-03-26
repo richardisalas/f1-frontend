@@ -1,22 +1,10 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "f1-app/package.json",
-      "use": "@vercel/next"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "f1-app/$1"
-    }
-  ],
   "env": {
-    "OPENAI_API_KEY": "@openai_api_key",
-    "ASTRADB_DB_NAMESPACE": "@astradb_db_namespace",
-    "ASTRADB_DB_COLLECTION": "@astradb_db_collection",
-    "ASTRADB_DB_ENDPOINT": "@astradb_db_endpoint",
-    "ASTRA_DB_APPLICATION_TOKEN": "@astra_db_application_token"
+    "OPENAI_API_KEY": "${OPENAI_API_KEY}",
+    "ASTRADB_DB_NAMESPACE": "${ASTRADB_DB_NAMESPACE}",
+    "ASTRADB_DB_COLLECTION": "${ASTRADB_DB_COLLECTION}",
+    "ASTRADB_DB_ENDPOINT": "${ASTRADB_DB_ENDPOINT}",
+    "ASTRA_DB_APPLICATION_TOKEN": "${ASTRA_DB_APPLICATION_TOKEN}"
   }
 } 
