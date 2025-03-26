@@ -17,6 +17,8 @@ const openai = new OpenAI({
 const client = new DataAPIClient(ASTRA_DB_APPLICATION_TOKEN)
 const db = client.db(ASTRADB_DB_ENDPOINT, { namespace: ASTRADB_DB_NAMESPACE })
 
+export const runtime = 'edge'
+
 export async function POST(req: Request) {
     try {
         const {messages} = await req.json()
@@ -74,7 +76,7 @@ export async function POST(req: Request) {
             messages: [template, ...messages],
             stream: true
         })
-        
+
         const stream = OpenAIStream(response)
         return new StreamingTextResponse(stream)
         
