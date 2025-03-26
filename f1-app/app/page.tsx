@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import f1GPTLogo from "./assets/F1-logo.png"
-import { useChat, Message } from "ai/react"
+import { useChat } from 'ai/react'
 
 export default function Home() {
   // Always use a relative URL for API requests to avoid cross-origin issues
@@ -12,20 +12,17 @@ export default function Home() {
   
   console.log("Using API URL:", apiUrl);
   
-  const { messages, input, handleInputChange, handleSubmit, isLoading, setInput, setMessages, error } = useChat({
-    api: apiUrl,
-    onError: (err) => {
-      console.error("Chat error:", err);
-      setIsSubmitting(false);
-      setWaitingForFirstToken(false);
-      setDbError(err instanceof Error ? err.message : "Failed to communicate with the server");
+  const { messages, input, handleInputChange, handleSubmit, isLoading, error, setInput, setMessages } = useChat({
+    api: '/api/chat',
+    onError: (error) => {
+      console.error('Chat error:', error)
+      setDbError(error instanceof Error ? error.message : 'Failed to communicate with the server')
+      setIsSubmitting(false)
+      setWaitingForFirstToken(false)
     },
     onFinish: () => {
-      setIsSubmitting(false);
-      setWaitingForFirstToken(false);
-    },
-    headers: {
-      'Content-Type': 'application/json',
+      setIsSubmitting(false)
+      setWaitingForFirstToken(false)
     }
   })
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -69,24 +66,24 @@ export default function Home() {
     }, 150);
   }
 
-  // Custom form submission function
+  // Handle form submission
   const onFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!input.trim() || isSubmitting) return;
+    e.preventDefault()
+    if (!input.trim() || isSubmitting) return
     
     try {
-      console.log("Form submitted with:", input);
-      setIsSubmitting(true);
-      setWaitingForFirstToken(true);
+      console.log('Form submitted with:', input)
+      setIsSubmitting(true)
+      setWaitingForFirstToken(true)
       
-      // Use the handleSubmit function directly
-      handleSubmit(e);
+      // Use the SDK's handleSubmit
+      handleSubmit(e)
       
-      // Clear input
-      setInput("");
+      // Clear the input field
+      setInput("")
     } catch (error) {
-      console.error("Error submitting form:", error);
-      setDbError(error instanceof Error ? error.message : "Failed to submit message");
+      console.error('Error submitting form:', error)
+      setDbError(error instanceof Error ? error.message : 'Failed to submit message')
     }
   }
 
