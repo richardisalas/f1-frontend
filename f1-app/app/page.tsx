@@ -7,8 +7,16 @@ import f1GPTLogo from "./assets/F1-logo.png"
 import { useChat, Message } from "ai/react"
 
 export default function Home() {
+  // Get the base URL for API requests
+  const baseUrl = process.env.NEXT_PUBLIC_VERCEL_URL 
+    ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`
+    : '';
+  const apiUrl = `${baseUrl}/api/chat`;
+  
+  console.log("Using API URL:", apiUrl);
+  
   const { messages, input, handleInputChange, handleSubmit, isLoading, setInput, setMessages, error } = useChat({
-    api: '/api/chat',
+    api: apiUrl,
     onError: (err) => {
       console.error("Chat error:", err);
       setIsSubmitting(false);
@@ -99,7 +107,7 @@ export default function Home() {
         setMessages(newMessages);
         
         try {
-          const response = await fetch('/api/chat', {
+          const response = await fetch(apiUrl, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
