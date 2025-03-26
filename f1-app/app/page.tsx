@@ -11,9 +11,11 @@ export default function Home() {
     api: '/api/chat',
     onError: (err) => {
       console.error("Chat error:", err);
-      // Add a UI notification about the error
-      setDbError(`Connection error: ${err.message || 'Unknown error'}`);
-    }
+      setDbError(err instanceof Error ? err.message : "Failed to communicate with the server");
+    },
+    headers: {
+      'Content-Type': 'application/json',
+    },
   })
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const formRef = useRef<HTMLFormElement>(null)
@@ -56,10 +58,17 @@ export default function Home() {
   }
 
   // Manual form submission function
-  const onFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const onFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    console.log("Form submitted with:", input);
-    handleSubmit(e);
+    if (!input.trim() || isLoading) return;
+    
+    try {
+      console.log("Form submitted with:", input);
+      await handleSubmit(e);
+    } catch (error) {
+      console.error("Error submitting form:", error);
+      setDbError(error instanceof Error ? error.message : "Failed to submit message");
+    }
   }
 
   return (
@@ -178,7 +187,11 @@ export default function Home() {
 
       {/* Input area */}
       <div className="input-container">
-        <form ref={formRef} onSubmit={onFormSubmit} className="input-form">
+        <form 
+          ref={formRef} 
+          onSubmit={onFormSubmit} 
+          className="input-form"
+        >
           <div className="relative">
             <textarea
               value={input}

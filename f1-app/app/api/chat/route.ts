@@ -1,6 +1,7 @@
 import OpenAI from "openai"
 import { OpenAIStream, StreamingTextResponse } from "ai"
 import { DataAPIClient } from "@datastax/astra-db-ts"
+import { NextResponse } from "next/server"
 
 const {
     ASTRADB_DB_NAMESPACE,
@@ -19,27 +20,56 @@ const db = client.db(ASTRADB_DB_ENDPOINT, { namespace: ASTRADB_DB_NAMESPACE })
 
 export const runtime = 'edge'
 
+// Handle OPTIONS requests for CORS
+export async function OPTIONS() {
+    return new Response(null, {
+        status: 200,
+        headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        },
+    })
+}
+
+// Handle GET requests
+export async function GET() {
+    return NextResponse.json({ message: "Please use POST method for chat requests" }, { status: 405 })
+}
+
+// Handle POST requests
 export async function POST(req: Request) {
     try {
         console.log("API route called with request:", req.url);
         
-        const {messages} = await req.json()
+        if (!OPENAI_API_KEY) {
+            throw new Error("OpenAI API key is not configured");
+        }
+
+        if (!ASTRA_DB_APPLICATION_TOKEN || !ASTRADB_DB_ENDPOINT || !ASTRADB_DB_NAMESPACE || !ASTRADB_DB_COLLECTION) {
+            throw new Error("Database configuration is incomplete");
+        }
+
+        const { messages } = await req.json();
         
+        if (!messages || !Array.isArray(messages) || messages.length === 0) {
+            throw new Error("Invalid messages format");
+        }
+
         console.log("Received messages:", messages.length);
         
-        if (!OPENAI_API_KEY) {
-            console.error("Missing OpenAI API key");
-            throw new Error("Missing OpenAI API key");
+        const latestMessage = messages[messages.length - 1]?.content;
+        if (!latestMessage) {
+            throw new Error("No message content found");
         }
-        
-        const lastestMessage = messages[messages?.length - 1]?.content
-        console.log("Latest message:", lastestMessage);
+
+        console.log("Latest message:", latestMessage);
 
         let docContext = ""
 
         const embedding = await openai.embeddings.create({
             model: "text-embedding-3-small",
-            input: lastestMessage,
+            input: latestMessage,
             encoding_format: "float"
         })
         console.log("Created embeddings successfully");
@@ -94,7 +124,7 @@ export async function POST(req: Request) {
             ${docContext}
             END CONTEXT
             ----------
-            QUESTION: ${lastestMessage}
+            QUESTION: ${latestMessage}
             ----------
             `
         }
@@ -109,34 +139,36 @@ export async function POST(req: Request) {
         return new StreamingTextResponse(stream)
         
     } catch (error) {
-        console.error("Error in chat API route:", error)
+        console.error("Error in chat API route:", error);
         
-        // Provide more detailed error info in the response
         let errorMessage = "Failed to process chat request";
+        let statusCode = 500;
         
         if (error instanceof Error) {
             errorMessage = error.message;
             
-            // Check for specific error types
-            if (errorMessage.includes("ASTRA") || errorMessage.includes("DB")) {
-                errorMessage = "Database connection error: " + errorMessage;
-            } else if (errorMessage.includes("OPENAI") || errorMessage.includes("API key")) {
-                errorMessage = "OpenAI API error: " + errorMessage;
+            if (errorMessage.includes("API key")) {
+                statusCode = 401;
+            } else if (errorMessage.includes("Invalid") || errorMessage.includes("No message")) {
+                statusCode = 400;
             }
         }
         
-        return new Response(JSON.stringify({ 
-            error: errorMessage,
-            details: {
-                dbConnected: !!client && !!db,
-                hasOpenAIKey: !!OPENAI_API_KEY,
-                hasAstraDBConfig: !!(ASTRADB_DB_NAMESPACE && ASTRADB_DB_COLLECTION && ASTRADB_DB_ENDPOINT && ASTRA_DB_APPLICATION_TOKEN)
+        return new Response(
+            JSON.stringify({ 
+                error: errorMessage,
+                details: {
+                    dbConnected: !!client && !!db,
+                    hasOpenAIKey: !!OPENAI_API_KEY,
+                    hasAstraDBConfig: !!(ASTRADB_DB_NAMESPACE && ASTRADB_DB_COLLECTION && ASTRADB_DB_ENDPOINT && ASTRA_DB_APPLICATION_TOKEN)
+                }
+            }), 
+            {
+                status: statusCode,
+                headers: {
+                    "Content-Type": "application/json",
+                },
             }
-        }), {
-            status: 500,
-            headers: {
-                "Content-Type": "application/json",
-            },
-        })
+        );
     }
 }
