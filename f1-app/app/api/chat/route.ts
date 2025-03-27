@@ -136,32 +136,31 @@ export async function POST(req: Request) {
       Format responses using markdown where applicable and don't return images.`
     }
     
-    // Format response for AI SDK compatibility
-    const formatToAISDKResponse = (text: string) => {
-      return `data: ${JSON.stringify({ text })}\n\n`
-    }
-    
-    // Generate response
     try {
-      // Create the streaming response
-      const response = await openai.chat.completions.create({
-        model: 'gpt-4',
-        messages: [systemPrompt, ...messages],
-        stream: true,
-      })
-      
-      // Convert the response to a readable stream using the standard browser TextEncoder
+      // Create a new ReadableStream with a controller that we can manually append to
       const encoder = new TextEncoder()
+      let counter = 0
+      
       const stream = new ReadableStream({
         async start(controller) {
-          for await (const chunk of response) {
+          const chatCompletion = await openai.chat.completions.create({
+            model: 'gpt-4',
+            messages: [systemPrompt, ...messages],
+            stream: true,
+          })
+          
+          // Process the stream
+          for await (const chunk of chatCompletion) {
+            counter++
             const content = chunk.choices[0]?.delta?.content || ''
             if (content) {
-              controller.enqueue(encoder.encode(formatToAISDKResponse(content)))
+              // Important: The AI SDK expects the "content" field (not "text")
+              const formattedChunk = JSON.stringify({ content })
+              controller.enqueue(encoder.encode(`data: ${formattedChunk}\n\n`))
             }
           }
           
-          // End the stream
+          // Send the final [DONE] marker
           controller.enqueue(encoder.encode('data: [DONE]\n\n'))
           controller.close()
         }
