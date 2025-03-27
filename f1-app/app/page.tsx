@@ -27,20 +27,38 @@ export default function Home() {
     api: '/api/chat',
     onResponse: (response) => {
       // Handle successful response
+      console.log('[DEBUG] Got API response:', response.status);
       if (response.status === 200) {
-        setWaitingForFirstToken(false)
+        console.log('[DEBUG] Response status OK');
+        setWaitingForFirstToken(false);
+        
+        // Debug the response body
+        response.clone().text().then(text => {
+          console.log('[DEBUG] First part of response body:', text.slice(0, 200));
+        }).catch(e => {
+          console.error('[DEBUG] Failed to read response:', e);
+        });
       } else {
-        console.error('Error response:', response.status)
-        setDbError(`API responded with status: ${response.status}`)
+        console.error('Error response:', response.status, response.statusText)
+        setDbError(`API responded with status: ${response.status} - ${response.statusText}`)
       }
     },
     onError: (error) => {
-      console.error('Chat error:', error)
-      setDbError(error instanceof Error ? error.message : 'Failed to communicate with the server')
+      console.error('[DEBUG] Chat error:', error)
+      let errorMessage = error instanceof Error ? error.message : 'Failed to communicate with the server'
+      
+      // Check for specific error patterns
+      if (errorMessage.includes('parse') || errorMessage.includes('stream')) {
+        console.error('[DEBUG] Parse error detected in stream');
+        errorMessage = "Failed to parse stream data. The server response format might be invalid."
+      }
+      
+      setDbError(errorMessage)
       setIsSubmitting(false)
       setWaitingForFirstToken(false)
     },
     onFinish: () => {
+      console.log('[DEBUG] Chat finished successfully');
       setIsSubmitting(false)
       setWaitingForFirstToken(false)
     },

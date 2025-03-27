@@ -1,6 +1,6 @@
-import { Message } from 'ai'
-import { DataAPIClient } from "@datastax/astra-db-ts"
-import OpenAI from 'openai'
+import { Message } from 'ai';
+import OpenAI from 'openai';
+import { DataAPIClient } from "@datastax/astra-db-ts";
 
 // CORS headers
 const corsHeaders = {
@@ -11,186 +11,130 @@ const corsHeaders = {
 };
 
 // Export edge runtime
-export const runtime = 'edge'
+export const runtime = 'edge';
+
+// Initialize OpenAI client with environment variable
+const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY
+});
+
+// Initialize DataStax AstraDB client
+const client = new DataAPIClient(process.env.ASTRA_DB_APPLICATION_TOKEN);
+const db = client.db(process.env.ASTRA_DB_API_ENDPOINT, { 
+  namespace: process.env.ASTRADB_DB_NAMESPACE 
+});
 
 export async function OPTIONS() {
   return new Response(null, {
     status: 204,
     headers: corsHeaders
-  })
+  });
 }
-
-// Function to get context from AstraDB
-async function getContext(message: string) {
-  // Check if we have all the required environment variables
-  if (
-    !process.env.ASTRA_DB_APPLICATION_TOKEN ||
-    !process.env.ASTRA_DB_API_ENDPOINT ||
-    !process.env.ASTRADB_DB_COLLECTION ||
-    !process.env.OPENAI_API_KEY
-  ) {
-    console.warn('Missing required environment variables for vector search')
-    return ''
-  }
-
-  try {
-    // Initialize OpenAI client for embeddings
-    const openAIClient = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY
-    })
-    
-    // Setup AstraDB client
-    const client = new DataAPIClient(process.env.ASTRA_DB_APPLICATION_TOKEN)
-    const db = client.db(process.env.ASTRA_DB_API_ENDPOINT, {
-      namespace: process.env.ASTRADB_DB_NAMESPACE || 'default_keyspace'
-    })
-    const collection = await db.collection(process.env.ASTRADB_DB_COLLECTION)
-    
-    // Generate embeddings
-    const embedding = await openAIClient.embeddings.create({
-      model: 'text-embedding-3-small',
-      input: message,
-      encoding_format: 'float'
-    })
-    
-    // Query the vector database
-    const cursor = collection.find(null, {
-      sort: {
-        $vector: embedding.data[0].embedding
-      },
-      limit: 5
-    })
-    
-    const documents = await cursor.toArray()
-    const contexts = documents?.map(doc => doc.text) || []
-    
-    // Return context if documents were found
-    if (contexts.length > 0) {
-      return contexts.join('\n\n')
-    }
-    
-    return ''
-  } catch (error) {
-    console.error('Error retrieving context:', error)
-    return ''
-  }
-}
-
 export async function POST(req: Request) {
-  try {
-    // Initialize OpenAI with API key
-    if (!process.env.OPENAI_API_KEY) {
-      throw new Error('OPENAI_API_KEY environment variable is not set')
-    }
-    
-    const openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY
-    })
-    
-    // Parse JSON request body
-    let messages
     try {
-      const body = await req.json()
-      messages = body.messages
-      
-      if (!messages || !Array.isArray(messages)) {
-        throw new Error('Invalid messages format')
-      }
-    } catch (error) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid request body' }),
-        {
-          status: 400,
-          headers: {
-            ...corsHeaders,
-            'Content-Type': 'application/json'
-          }
+        const {messages} = await req.json()
+        const lastestMessage = messages[messages?.length - 1]?.content
+
+        let docContext = ""
+
+        const embedding = await openai.embeddings.create({
+            model: "text-embedding-3-small",
+            input: lastestMessage,
+            encoding_format: "float"
+        })
+
+        try {
+            const collection = await db.collection(process.env.ASTRADB_DB_COLLECTION)
+            const cursor = collection.find(null, {
+                sort: {
+                    $vector: embedding.data[0].embedding,
+                },
+                limit: 10
+            })  
+
+            const documents = await cursor.toArray()
+            const docsMap = documents?.map(doc => doc.text)
+            docContext = JSON.stringify(docsMap)
+        } catch (error) {
+            console.log("Error querying database:", error)
+            docContext = ""
         }
-      )
-    }
-    
-    // Get the last message for context retrieval
-    const lastMessage = messages[messages.length - 1]
-    
-    // Get context from AstraDB
-    let context = ''
-    try {
-      context = await getContext(lastMessage.content)
-    } catch (error) {
-      console.error('Error getting context:', error)
-      // Continue without context on error
-    }
-    
-    // Create system message with context
-    const systemPrompt = {
-      role: "system",
-      content: `You are an AI assistant who knows everything about Formula 1.
-      Use the below context to augment what you know about Formula One racing.
-      
-      ${context ? `START CONTEXT BLOCK
-      ${context}
-      END CONTEXT BLOCK` : ''}
-      
-      If the context doesn't include the information you need, answer based on
-      your existing knowledge and don't mention the source of your information.
-      Format responses using markdown where applicable and don't return images.`
-    }
-    
-    try {
-      // Create OpenAI completion request
-      const completion = await openai.chat.completions.create({
-        model: 'gpt-4',
-        messages: [systemPrompt, ...messages],
-        stream: true,
-      });
-      
-      // Create a stream with a simple, compatible format
-      const stream = new ReadableStream({
-        async start(controller) {
-          // Process each chunk as it arrives
-          for await (const chunk of completion) {
-            const content = chunk.choices[0]?.delta?.content || '';
-            if (content) {
-              // Format in the exact way Vercel AI SDK expects
-              controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ content })}\n\n`));
+        
+        const template = {
+            role: "system",
+            content: `You are an AI assistant who knows everything about Formula 1. 
+            Use the below context to augment what you know about Formula One racing.
+            The contect will provide you tih the most recent page data from wikipedia,
+            the official F1 website and others.
+
+            If the context doesn't include the information you need answer based on
+            your existing knowlege and don't mention the source of your information or 
+            what the context does or doesn't include.
+
+            Format responses using markdown where applicable and don't return images.
+            ----------
+            START CONTEXT
+            ${docContext}
+            END CONTEXT
+            ----------
+            QUESTION: ${lastestMessage}
+            ----------
+            `
+        }
+        
+        // Enable streaming
+        const stream = await openai.chat.completions.create({
+            model: "gpt-4",
+            messages: [template, ...messages],
+            stream: true
+        })
+        
+        // Return streaming response with proper format
+        return new Response(
+            new ReadableStream({
+                async start(controller) {
+                    const encoder = new TextEncoder();
+                    try {
+                        for await (const chunk of stream) {
+                            const content = chunk.choices[0]?.delta?.content || "";
+                            if (content) {
+                                // Format according to ai/react useChat expectations
+                                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content, role: "assistant" })}\n\n`));
+                            }
+                        }
+                        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+                    } catch (error) {
+                        console.error("Error in stream:", error);
+                        // Send a properly formatted error that the client can parse
+                        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
+                            content: "An error occurred while generating the response. Please try again.", 
+                            role: "assistant",
+                            error: String(error)
+                        })}\n\n`));
+                        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+                    } finally {
+                        controller.close();
+                    }
+                }
+            }),
+            {
+                headers: {
+                    ...corsHeaders,
+                    "Content-Type": "text/event-stream",
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive"
+                }
             }
-          }
-          
-          // Signal completion with the [DONE] marker as plain text
-          controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
-          controller.close();
-        },
-      });
-      
-      // Return the simple stream with correct headers
-      return new Response(stream, {
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-        },
-      });
+        );
+        
     } catch (error) {
-      console.error('OpenAI API error:', error)
-      throw new Error(`OpenAI API error: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        console.error("Error in chat API route:", error)
+        return new Response(JSON.stringify({ error: "Failed to process chat request" }), {
+            status: 500,
+            headers: {
+                ...corsHeaders,
+                "Content-Type": "application/json",
+            },
+        })
     }
-  } catch (error) {
-    console.error('Error in chat API:', error)
-    // Return detailed error for debugging
-    return new Response(
-      JSON.stringify({ 
-        error: 'Failed to process request',
-        details: error instanceof Error ? error.message : 'Unknown error',
-        timestamp: new Date().toISOString()
-      }),
-      {
-        status: 500,
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'application/json'
-        }
-      }
-    )
-  }
 }
