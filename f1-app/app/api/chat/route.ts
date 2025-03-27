@@ -94,33 +94,21 @@ export async function POST(req: Request) {
             new ReadableStream({
                 async start(controller) {
                     const encoder = new TextEncoder();
-                    const decoder = new TextDecoder();
                     
                     try {
-                        let counter = 0;
-                        let responseText = '';
-                        
                         for await (const chunk of stream) {
                             const content = chunk.choices[0]?.delta?.content || "";
                             if (content) {
-                                responseText += content;
-                                counter++;
-                                
-                                // Send simple tokens that useChat expects
-                                const queueItem = encoder.encode(`data: ${JSON.stringify({
-                                    token: content
-                                })}\n\n`);
-                                controller.enqueue(queueItem);
+                                // Format as SSE data for useChat in ai/react
+                                controller.enqueue(encoder.encode(`data: {"role": "assistant", "content": ${JSON.stringify(content)}}\n\n`));
                             }
                         }
                         
-                        // End the stream
+                        // End the stream properly
                         controller.enqueue(encoder.encode('data: [DONE]\n\n'));
                     } catch (error) {
                         console.error("Error in stream:", error);
-                        controller.enqueue(encoder.encode(`data: ${JSON.stringify({
-                            error: String(error)
-                        })}\n\n`));
+                        controller.enqueue(encoder.encode(`data: {"role": "assistant", "content": "Error generating response."}\n\n`));
                         controller.enqueue(encoder.encode('data: [DONE]\n\n'));
                     } finally {
                         controller.close();
