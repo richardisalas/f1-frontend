@@ -99,8 +99,8 @@ export async function POST(req: Request) {
                         for await (const chunk of stream) {
                             const content = chunk.choices[0]?.delta?.content || "";
                             if (content) {
-                                // Format as SSE data for useChat in ai/react
-                                controller.enqueue(encoder.encode(`data: {"role": "assistant", "content": ${JSON.stringify(content)}}\n\n`));
+                                // Format as token-based SSE that the client is actually expecting
+                                controller.enqueue(encoder.encode(`data: {"token": ${JSON.stringify(content)}}\n\n`));
                             }
                         }
                         
@@ -108,7 +108,7 @@ export async function POST(req: Request) {
                         controller.enqueue(encoder.encode('data: [DONE]\n\n'));
                     } catch (error) {
                         console.error("Error in stream:", error);
-                        controller.enqueue(encoder.encode(`data: {"role": "assistant", "content": "Error generating response."}\n\n`));
+                        controller.enqueue(encoder.encode(`data: {"token": "Error generating response."}\n\n`));
                         controller.enqueue(encoder.encode('data: [DONE]\n\n'));
                     } finally {
                         controller.close();
