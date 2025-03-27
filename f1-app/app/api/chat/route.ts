@@ -137,47 +137,39 @@ export async function POST(req: Request) {
     }
     
     try {
-      // Create a simple streamed response using the ReadableStream API
+      // Create OpenAI completion request
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4',
+        messages: [systemPrompt, ...messages],
+        stream: true,
+      });
+      
+      // Create a stream with a simple, compatible format
       const stream = new ReadableStream({
         async start(controller) {
-          // Create OpenAI stream
-          const chatCompletion = await openai.chat.completions.create({
-            model: 'gpt-4',
-            messages: [systemPrompt, ...messages],
-            stream: true,
-          })
-          
-          // Accumulate full response for potential debugging
-          let fullResponse = ''
-          
-          // Process each chunk
-          for await (const part of chatCompletion) {
-            // Get content from the chunk
-            const content = part.choices[0]?.delta?.content || ''
+          // Process each chunk as it arrives
+          for await (const chunk of completion) {
+            const content = chunk.choices[0]?.delta?.content || '';
             if (content) {
-              fullResponse += content
-              
-              // Format exactly as the AI SDK expects
-              const payload = JSON.stringify({ role: "assistant", content, done: false });
-              const data = `data: ${payload}\n\n`;
-              controller.enqueue(new TextEncoder().encode(data));
+              // Format in the exact way Vercel AI SDK expects
+              controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ content })}\n\n`));
             }
           }
           
-          // End the stream correctly
-          const done = JSON.stringify({ done: true });
-          controller.enqueue(new TextEncoder().encode(`data: ${done}\n\n`));
+          // Signal completion with the [DONE] marker as plain text
+          controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
           controller.close();
-        }
+        },
       });
       
-      // Return the stream
+      // Return the simple stream with correct headers
       return new Response(stream, {
         headers: {
           ...corsHeaders,
           'Content-Type': 'text/event-stream',
           'Cache-Control': 'no-cache',
-        }
+          'Connection': 'keep-alive',
+        },
       });
     } catch (error) {
       console.error('OpenAI API error:', error)
