@@ -75,6 +75,19 @@ export default function Home() {
       // Check for specific error patterns
       if (errorMessage.includes('parse') || errorMessage.includes('stream')) {
         console.error('[DEBUG] Parse error detected in stream');
+        
+        // Try to get more information about what caused the parse error
+        try {
+          if (typeof window !== 'undefined') {
+            console.log('[DEBUG] Document title:', document.title);
+            console.log('[DEBUG] Available globals:', 
+              Object.keys((window as any).__NEXT_DATA__?.props?.pageProps || {})
+            );
+          }
+        } catch (debugError) {
+          console.error('[DEBUG] Error inspecting window:', debugError);
+        }
+        
         errorMessage = "Failed to parse stream data. The server response format might be invalid."
       }
       

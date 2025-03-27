@@ -94,32 +94,33 @@ export async function POST(req: Request) {
             new ReadableStream({
                 async start(controller) {
                     const encoder = new TextEncoder();
+                    const decoder = new TextDecoder();
+                    
                     try {
+                        let counter = 0;
+                        let responseText = '';
+                        
                         for await (const chunk of stream) {
                             const content = chunk.choices[0]?.delta?.content || "";
                             if (content) {
-                                // Format exactly as expected by the AI SDK
-                                const formattedMessage = JSON.stringify({
-                                    id: Math.random().toString(36).substring(2, 12),
-                                    role: "assistant",
-                                    content: content,
-                                    createdAt: new Date()
-                                });
-                                controller.enqueue(encoder.encode(`data: ${formattedMessage}\n\n`));
+                                responseText += content;
+                                counter++;
+                                
+                                // Send simple tokens that useChat expects
+                                const queueItem = encoder.encode(`data: ${JSON.stringify({
+                                    token: content
+                                })}\n\n`);
+                                controller.enqueue(queueItem);
                             }
                         }
-                        // Send proper end marker
+                        
+                        // End the stream
                         controller.enqueue(encoder.encode('data: [DONE]\n\n'));
                     } catch (error) {
                         console.error("Error in stream:", error);
-                        // Send a properly formatted error message
-                        const errorMessage = JSON.stringify({
-                            id: Math.random().toString(36).substring(2, 12),
-                            role: "assistant",
-                            content: "An error occurred while generating the response.",
-                            createdAt: new Date()
-                        });
-                        controller.enqueue(encoder.encode(`data: ${errorMessage}\n\n`));
+                        controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+                            error: String(error)
+                        })}\n\n`));
                         controller.enqueue(encoder.encode('data: [DONE]\n\n'));
                     } finally {
                         controller.close();
