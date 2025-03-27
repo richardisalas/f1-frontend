@@ -137,44 +137,48 @@ export async function POST(req: Request) {
     }
     
     try {
-      // Create a new ReadableStream with a controller that we can manually append to
-      const encoder = new TextEncoder()
-      let counter = 0
-      
+      // Create a simple streamed response using the ReadableStream API
       const stream = new ReadableStream({
         async start(controller) {
+          // Create OpenAI stream
           const chatCompletion = await openai.chat.completions.create({
             model: 'gpt-4',
             messages: [systemPrompt, ...messages],
             stream: true,
           })
           
-          // Process the stream
-          for await (const chunk of chatCompletion) {
-            counter++
-            const content = chunk.choices[0]?.delta?.content || ''
+          // Accumulate full response for potential debugging
+          let fullResponse = ''
+          
+          // Process each chunk
+          for await (const part of chatCompletion) {
+            // Get content from the chunk
+            const content = part.choices[0]?.delta?.content || ''
             if (content) {
-              // Important: The AI SDK expects the "content" field (not "text")
-              const formattedChunk = JSON.stringify({ content })
-              controller.enqueue(encoder.encode(`data: ${formattedChunk}\n\n`))
+              fullResponse += content
+              
+              // Format exactly as the AI SDK expects
+              const payload = JSON.stringify({ role: "assistant", content, done: false });
+              const data = `data: ${payload}\n\n`;
+              controller.enqueue(new TextEncoder().encode(data));
             }
           }
           
-          // Send the final [DONE] marker
-          controller.enqueue(encoder.encode('data: [DONE]\n\n'))
-          controller.close()
+          // End the stream correctly
+          const done = JSON.stringify({ done: true });
+          controller.enqueue(new TextEncoder().encode(`data: ${done}\n\n`));
+          controller.close();
         }
-      })
+      });
       
-      // Return the stream with SSE headers
+      // Return the stream
       return new Response(stream, {
         headers: {
           ...corsHeaders,
           'Content-Type': 'text/event-stream',
           'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive'
         }
-      })
+      });
     } catch (error) {
       console.error('OpenAI API error:', error)
       throw new Error(`OpenAI API error: ${error instanceof Error ? error.message : 'Unknown error'}`)
