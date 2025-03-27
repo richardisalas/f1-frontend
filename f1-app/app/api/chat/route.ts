@@ -98,20 +98,29 @@ export async function POST(req: Request) {
                         for await (const chunk of stream) {
                             const content = chunk.choices[0]?.delta?.content || "";
                             if (content) {
-                                // Format according to ai/react useChat expectations
-                                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content, role: "assistant" })}\n\n`));
+                                // Format exactly as expected by the AI SDK
+                                const formattedMessage = JSON.stringify({
+                                    id: Math.random().toString(36).substring(2, 12),
+                                    role: "assistant",
+                                    content: content,
+                                    createdAt: new Date()
+                                });
+                                controller.enqueue(encoder.encode(`data: ${formattedMessage}\n\n`));
                             }
                         }
-                        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+                        // Send proper end marker
+                        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
                     } catch (error) {
                         console.error("Error in stream:", error);
-                        // Send a properly formatted error that the client can parse
-                        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
-                            content: "An error occurred while generating the response. Please try again.", 
+                        // Send a properly formatted error message
+                        const errorMessage = JSON.stringify({
+                            id: Math.random().toString(36).substring(2, 12),
                             role: "assistant",
-                            error: String(error)
-                        })}\n\n`));
-                        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+                            content: "An error occurred while generating the response.",
+                            createdAt: new Date()
+                        });
+                        controller.enqueue(encoder.encode(`data: ${errorMessage}\n\n`));
+                        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
                     } finally {
                         controller.close();
                     }

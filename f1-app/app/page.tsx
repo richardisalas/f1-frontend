@@ -32,15 +32,40 @@ export default function Home() {
         console.log('[DEBUG] Response status OK');
         setWaitingForFirstToken(false);
         
+        // Debug the response headers
+        console.log('[DEBUG] Response headers:', 
+          Array.from(response.headers.entries())
+            .map(([key, value]) => `${key}: ${value}`)
+            .join(', ')
+        );
+        
         // Debug the response body
         response.clone().text().then(text => {
-          console.log('[DEBUG] First part of response body:', text.slice(0, 200));
+          console.log('[DEBUG] First part of response body:', text.slice(0, 300));
+          
+          // Additional debug for stream format
+          const lines = text.split('\n\n').slice(0, 3);
+          console.log('[DEBUG] Response format analysis:', 
+            lines.map(line => {
+              try {
+                if (line.startsWith('data: ')) {
+                  const data = line.slice(6);
+                  if (data === '[DONE]') return 'End marker found';
+                  const parsed = JSON.parse(data);
+                  return `Valid JSON with keys: ${Object.keys(parsed).join(', ')}`;
+                }
+                return `Line doesn't start with 'data: ': ${line.slice(0, 20)}...`;
+              } catch (e) {
+                return `Failed to parse: ${e.message}`;
+              }
+            })
+          );
         }).catch(e => {
           console.error('[DEBUG] Failed to read response:', e);
         });
       } else {
-        console.error('Error response:', response.status, response.statusText)
-        setDbError(`API responded with status: ${response.status} - ${response.statusText}`)
+        console.error('Error response:', response.status, response.statusText);
+        setDbError(`API responded with status: ${response.status} - ${response.statusText}`);
       }
     },
     onError: (error) => {
